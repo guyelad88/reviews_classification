@@ -163,7 +163,7 @@ def main(input_data_file, vertical_type, output_results_folder, tensor_board_dir
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'fashion'       # 'fashion'/'motors'
+    vertical_type = 'motors'       # 'fashion'/'motors'
     output_results_folder = '../results/'
     tensor_board_dir = '../results/tensor_board_graph/'
     test_size = 0.2
@@ -177,15 +177,14 @@ if __name__ == '__main__':
     multi_class_configuration_dict = {
         'multi_class_bool': True,      # whether to do single/multi class classification
         'multi_class_label': ['review_tag',
-                              'subjective_sentence']
-                              # 'missing_context']
+                              'subjective_sentence']  # 'missing_context', 'Refers to a specific listing aspect', 'Non-informative sentence']
     }
 
     attention_configuration_dict = {
-        'use_attention_bool': False,
+        'use_attention_bool': False
         # 'attention_before_lstm_bool': False,
         # 'single_attention_vector': False,
-        'attention_with_context': True
+        # 'attention_with_context': False
     }
 
     # tag bad/good prediction
@@ -199,15 +198,15 @@ if __name__ == '__main__':
     # quick hyper-parameters tuning
     lstm_parameters_dict = {
         'max_features': 200000,
-        'maxlen': [5, 20, 25],  # 20      # [8, 10, 15, 20],
-        'batch_size': [128, 32],  # 32
-        'embedding_size': [50, 300, 200],  # 50, 100, 200, 300   [64, 128, 256],
+        'maxlen': [20],  # 20      # [8, 10, 15, 20],
+        'batch_size': [32],  # 32
+        'embedding_size': [300],  # 50, 100, 200, 300   [64, 128, 256],
         'lstm_hidden_layer': [200],  # 50, 100,
         'num_epoch': 30,
-        'dropout': [0.28, 0.38],  # 0.2, 0.35, 0.5
+        'dropout': [0.33, 0.28, 0.38],  # 0.2, 0.35, 0.5
         'recurrent_dropout': [0.35],  # 0.2, 0.35, 0.5
         'optimizer': 'rmsprop',    # 'rmsprop'
-        'patience': 5,
+        'patience': 4,
         'tensor_board_bool': True,
         'max_num_words': None  # number of words allow in the tokenizer process - keras text tokenizer
     }
@@ -215,8 +214,12 @@ if __name__ == '__main__':
     if vertical_type == 'fashion':
         input_data_file = '../data/clean/clean_data_fashion.csv'
         input_data_file = '../data/clean/clean_data_multi_fashion.csv'
+        input_data_file = '../data/clean/clean_data_multi_new_fashion.csv'
+
     elif vertical_type == 'motors':
         input_data_file = '../data/clean/clean_data_motors.csv'
+        input_data_file = '../data/clean/clean_data_multi_new_motors.csv'
+
     else:
         raise()
 

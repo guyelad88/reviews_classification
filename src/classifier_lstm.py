@@ -356,7 +356,7 @@ class PredictDescriptionModelLSTM:
             embedding_layer = self._add_pre_trained_embedding()
             embedded_sequences = embedding_layer(comment_input)
             lstm_layer = (LSTM(
-                    self.lstm_hidden_layer,
+                    150,    # self.lstm_hidden_layer, TODO change to argument
                     dropout=self.dropout,
                     recurrent_dropout=self.recurrent_dropout
             ))
@@ -370,33 +370,77 @@ class PredictDescriptionModelLSTM:
             # dropout3 = Dropout(self.dropout)(sub3)
             out1 = Dense(1)(dropout1)
             out2 = Dense(1)(dropout2)'''
+            if len(self.y_train) == 2:
+                self.logging.info('multi-task with 2 outputs')
+                x = lstm_layer(embedded_sequences)
 
-            x = lstm_layer(embedded_sequences)
-            # shared = Dense(32)(x)
-            sub1 = Dense(16)(x)
-            sub2 = Dense(16)(x)
-            # sub3 = Dense(16)(shared)
-            dropout1 = Dropout(self.dropout)(sub1)
-            dropout2 = Dropout(self.dropout)(sub2)
-            # dropout3 = Dropout(self.dropout)(sub3)
+                '''sub1 = Dense(16)(x)
+                sub2 = Dense(16)(x)
+                dropout1 = Dropout(self.dropout)(sub1)
+                dropout2 = Dropout(self.dropout)(sub2)
+                out1 = Dense(1, activation='sigmoid')(dropout1)
+                mid2 = Dense(1, activation='sigmoid')(dropout2)'''
 
-            out1 = Dense(1, activation='sigmoid')(dropout1)
-            mid1 = Dense(1, activation='sigmoid')(dropout2)
-            con_layer = Concatenate()([out1, mid1])
-            out2 = Dense(1, activation='sigmoid')(con_layer)
-            # out3 = Dense(1)(dropout3)
-            '''out1 = Dense(1)(sub1)
-            out2 = Dense(1)(sub2)
-            out3 = Dense(1)(sub3)'''
+                out1 = Dense(1, activation='sigmoid')(x)
+                mid2 = Dense(1, activation='sigmoid')(x)
+                con_layer = Concatenate()([out1, mid2])
+                out2 = Dense(1, activation='sigmoid')(con_layer)
 
-            '''out1 = Dense(1)(shared)
-            out2 = Dense(1)(shared)
-            out3 = Dense(1)(shared)'''
+                model = Model(inputs=comment_input, outputs=[out1, out2])           # , out3])
+                model.compile(loss='binary_crossentropy',
+                              optimizer=self.optimizer,
+                              loss_weights=[1.5, 1],
+                              metrics=['accuracy'])
 
-            model = Model(inputs=comment_input, outputs=[out1, out2])           # , out3])
-            model.compile(loss='binary_crossentropy',
-                          optimizer=self.optimizer,
-                          metrics=['accuracy'])
+            elif len(self.y_train) == 3:
+                self.logging.info('multi-task with 3 outputs')
+                x = lstm_layer(embedded_sequences)
+                # shared = Dense(32)(x)
+                sub1 = Dense(16)(x)
+                sub2 = Dense(16)(x)
+                sub3 = Dense(16)(x)
+                dropout1 = Dropout(self.dropout)(sub1)
+                dropout2 = Dropout(self.dropout)(sub2)
+                dropout3 = Dropout(self.dropout)(sub3)
+
+                out1 = Dense(1, activation='sigmoid')(dropout1)
+
+                mid2 = Dense(1, activation='sigmoid')(dropout2)
+                con_layer = Concatenate()([out1, mid2])
+                out2 = Dense(1, activation='sigmoid')(con_layer)
+
+                mid3 = Dense(1, activation='sigmoid')(dropout3)
+                con_layer_3 = Concatenate()([out1, out2, mid3])
+                out3 = Dense(1, activation='sigmoid')(con_layer_3)
+
+                model = Model(inputs=comment_input, outputs=[out1, out2, out3])  # , out3])
+                model.compile(loss='binary_crossentropy',
+                              optimizer=self.optimizer,
+                              loss_weights=[2, 1, 1],
+                              metrics=['accuracy'])
+
+            elif len(self.y_train) == 5:
+                self.logging.info('multi-task with 5 outputs')
+                x = lstm_layer(embedded_sequences)
+
+                sub = Dense(16)(x)
+                sub1 = Dropout(self.dropout)(sub)
+
+                out2 = Dense(1, activation='sigmoid')(sub1)
+                out3 = Dense(1, activation='sigmoid')(sub1)
+                out4 = Dense(1, activation='sigmoid')(sub1)
+                out5 = Dense(1, activation='sigmoid')(sub1)
+
+                con_layer = Concatenate()([out2, out3, out4, out5, sub1])
+                out1 = Dense(1, activation='sigmoid')(con_layer)
+
+                model = Model(inputs=comment_input, outputs=[out1, out2, out3, out4, out5])  # , out3])
+                model.compile(loss='binary_crossentropy',
+                              optimizer=self.optimizer,
+                              loss_weights=[3, 1, 1, 1, 1],
+                              metrics=['accuracy'])
+            else:
+                raise('multi-task support 2 or 3 or 5 output classes')
 
             self.logging.info(model.summary())
 

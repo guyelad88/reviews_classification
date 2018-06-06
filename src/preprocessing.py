@@ -217,6 +217,15 @@ class CleanData:
         self.data_set_df['missing_context'] = np.nan
         self.data_set_df['missing_context'] = np.where(self.data_set_df['Reason'] == 'Missing context', 1, 0)
 
+        # c. change missing context to Binary 0:1
+        self.data_set_df['Refers to a specific listing aspect'] = np.nan
+        self.data_set_df['Refers to a specific listing aspect'] = np.where(self.data_set_df['Reason'] == 'Refers to a specific listing aspect', 1, 0)
+
+        # c. change missing context to Binary 0:1
+        self.data_set_df['Non-informative sentence'] = np.nan
+        self.data_set_df['Non-informative sentence'] = np.where(
+            self.data_set_df['Reason'].isin(['Non-informative sentence ', 'Non-informative sentence']), 1, 0)
+
         # c. change reason prediction to multi-class
         self.data_set_df['failure_reason'] = np.nan
 
@@ -229,7 +238,7 @@ class CleanData:
                 self.data_set_df.at[index, 'failure_reason'] = 12   # nan
 
         # save clean df
-        file_path = self.output_clean_folder + 'clean_data_multi_' + str(self.vertical_type) + '.csv'
+        file_path = self.output_clean_folder + 'clean_data_multi_new_' + str(self.vertical_type) + '.csv'
         self.data_set_df.to_csv(file_path)
 
         logging.info('')
@@ -279,12 +288,12 @@ def main(input_data_file, vertical_type, output_clean_folder):
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'fashion'   # 'fashion'/'motors'
+    vertical_type = 'motors'   # 'fashion'/'motors'
     output_clean_folder = '../data/clean/'
     if vertical_type == 'fashion':
         input_data_file = '../data/25K_amazon_fashion.csv'
     elif vertical_type == 'motors':
-        input_data_file = '../25K_amazon_motors.csv'
+        input_data_file = '../data/25K_amazon_motors.csv'
     else:
         raise()
 
