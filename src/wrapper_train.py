@@ -16,7 +16,7 @@ class WrapperTrainModel:
 
     def __init__(self, input_data_file, vertical_type, output_results_folder, tensor_board_dir, lstm_parameters_dict,
                  df_configuration_dict, cv_configuration, test_size, embedding_pre_trained,
-                 multi_class_configuration_dict, attention_configuration_dict):
+                 multi_class_configuration_dict, attention_configuration_dict, embedding_type):
 
         # file arguments
         self.input_data_file = input_data_file              # csv input file
@@ -33,6 +33,7 @@ class WrapperTrainModel:
 
         self.multi_class_configuration_dict = multi_class_configuration_dict
         self.attention_configuration_dict = attention_configuration_dict
+        self.embedding_type = embedding_type
 
         from time import gmtime, strftime
         self.cur_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
@@ -73,7 +74,7 @@ class WrapperTrainModel:
     def check_input(self):
 
         # glove embedding size must be one of '50', '100', '200', '300'
-        if self.embedding_pre_trained:
+        if self.embedding_pre_trained and self.embedding_type == 'glove':
             for e_s in self.lstm_parameters_dict['embedding_size']:
                 if e_s not in [50, 100, 200, 300]:
                     raise('glove embedding size must be one of [50, 100, 200, 300]')
@@ -91,14 +92,14 @@ class WrapperTrainModel:
 
         total_iteration = len(self.lstm_parameters_dict['maxlen'])\
                           * len(self.lstm_parameters_dict['batch_size'])\
-                          * len(self.lstm_parameters_dict['embedding_size'])\
+                          * len(self.lstm_parameters_dict['lstm_hidden_layer'])\
                           * len(self.lstm_parameters_dict['dropout'])
 
         model_num = 1
         for maxlen in self.lstm_parameters_dict['maxlen']:
             for batch_size in self.lstm_parameters_dict['batch_size']:
                 for dropout in self.lstm_parameters_dict['dropout']:
-                    for embedding_size in self.lstm_parameters_dict['embedding_size']:
+                    for lstm_hidden_layer in self.lstm_parameters_dict['lstm_hidden_layer']:
 
                         # run single lstm model with the following configuration
 
@@ -106,8 +107,8 @@ class WrapperTrainModel:
                             'max_features': self.lstm_parameters_dict['max_features'],
                             'maxlen': maxlen,
                             'batch_size': batch_size,
-                            'embedding_size': embedding_size,
-                            'lstm_hidden_layer': embedding_size,    # TODO change to different values
+                            'embedding_size': self.lstm_parameters_dict['embedding_size'],
+                            'lstm_hidden_layer': lstm_hidden_layer,    # TODO change to different values
                             'num_epoch': self.lstm_parameters_dict['num_epoch'],
                             'dropout': dropout,  # 0.2
                             'recurrent_dropout': dropout,  # 0.2
@@ -134,6 +135,7 @@ class WrapperTrainModel:
                                                self.cv_configuration,
                                                self.test_size,
                                                self.embedding_pre_trained,
+                                               self.embedding_type,
                                                logging)
 
                         model_num += 1
@@ -148,12 +150,12 @@ class WrapperTrainModel:
 
 def main(input_data_file, vertical_type, output_results_folder, tensor_board_dir, lstm_parameters_dict,
          df_configuration_dict, cv_configuration, test_size, embedding_pre_trained, multi_class_configuration_dict,
-         attention_configuration_dict):
+         attention_configuration_dict, embedding_type):
 
     train_obj = WrapperTrainModel(input_data_file, vertical_type, output_results_folder, tensor_board_dir,
                            lstm_parameters_dict, df_configuration_dict, cv_configuration,
                            test_size, embedding_pre_trained, multi_class_configuration_dict,
-                                  attention_configuration_dict)
+                                  attention_configuration_dict,embedding_type)
 
     train_obj.init_debug_log()              # init log file
     train_obj.check_input()
@@ -163,11 +165,12 @@ def main(input_data_file, vertical_type, output_results_folder, tensor_board_dir
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'motors'       # 'fashion'/'motors'
+    vertical_type = 'fashion'       # 'fashion'/'motors'
     output_results_folder = '../results/'
     tensor_board_dir = '../results/tensor_board_graph/'
     test_size = 0.2
     embedding_pre_trained = True
+    embedding_type = 'gensim'   # 'glove', 'gensim'
 
     cv_configuration = {
         'use_cv_bool': True,
@@ -182,9 +185,6 @@ if __name__ == '__main__':
 
     attention_configuration_dict = {
         'use_attention_bool': False
-        # 'attention_before_lstm_bool': False,
-        # 'single_attention_vector': False,
-        # 'attention_with_context': False
     }
 
     # tag bad/good prediction
@@ -200,13 +200,13 @@ if __name__ == '__main__':
         'max_features': 200000,
         'maxlen': [20],  # 20      # [8, 10, 15, 20],
         'batch_size': [32],  # 32
-        'embedding_size': [300],  # 50, 100, 200, 300   [64, 128, 256],
-        'lstm_hidden_layer': [200],  # 50, 100,
+        'embedding_size': 300,  # no more list
+        'lstm_hidden_layer': [400],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
         'num_epoch': 30,
-        'dropout': [0.33, 0.28, 0.38],  # 0.2, 0.35, 0.5
-        'recurrent_dropout': [0.35],  # 0.2, 0.35, 0.5
+        'dropout': [0.5],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'recurrent_dropout': [0.3],  # TODO currently does not use in the model
         'optimizer': 'rmsprop',    # 'rmsprop'
-        'patience': 4,
+        'patience': 5,
         'tensor_board_bool': True,
         'max_num_words': None  # number of words allow in the tokenizer process - keras text tokenizer
     }
@@ -225,4 +225,4 @@ if __name__ == '__main__':
 
     main(input_data_file, vertical_type, output_results_folder, tensor_board_dir, lstm_parameters_dict,
          df_configuration_dict, cv_configuration, test_size, embedding_pre_trained, multi_class_configuration_dict,
-         attention_configuration_dict)
+         attention_configuration_dict, embedding_type)

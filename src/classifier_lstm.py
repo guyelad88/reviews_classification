@@ -162,6 +162,7 @@ class PredictDescriptionModelLSTM:
                  attention_configuration_dict,
                  tensor_board_dir,
                  embedding_pre_trained,
+                 embedding_type,
                  vertical_type
                  ):
 
@@ -210,6 +211,7 @@ class PredictDescriptionModelLSTM:
 
         self.tensor_board_dir = tensor_board_dir                        # bool - if to use tensor board
         self.embedding_pre_trained = embedding_pre_trained              # bool - if to use pre trained embedding
+        self.embedding_type = embedding_type                            # glove or gensim
         self.vertical_type = vertical_type                              # vertical type
 
         # initialize global variable
@@ -356,30 +358,13 @@ class PredictDescriptionModelLSTM:
             embedding_layer = self._add_pre_trained_embedding()
             embedded_sequences = embedding_layer(comment_input)
             lstm_layer = (LSTM(
-                    150,    # self.lstm_hidden_layer, TODO change to argument
+                    self.lstm_hidden_layer,
                     dropout=self.dropout,
                     recurrent_dropout=self.recurrent_dropout
             ))
-            '''x = lstm_layer(embedded_sequences)
-            shared = Dense(32)(x)
-            sub1 = Dense(16)(shared)
-            sub2 = Dense(16)(shared)
-            sub3 = Dense(16)(shared)
-            dropout1 = Dropout(self.dropout)(sub1)
-            dropout2 = Dropout(self.dropout)(sub2)
-            # dropout3 = Dropout(self.dropout)(sub3)
-            out1 = Dense(1)(dropout1)
-            out2 = Dense(1)(dropout2)'''
             if len(self.y_train) == 2:
                 self.logging.info('multi-task with 2 outputs')
                 x = lstm_layer(embedded_sequences)
-
-                '''sub1 = Dense(16)(x)
-                sub2 = Dense(16)(x)
-                dropout1 = Dropout(self.dropout)(sub1)
-                dropout2 = Dropout(self.dropout)(sub2)
-                out1 = Dense(1, activation='sigmoid')(dropout1)
-                mid2 = Dense(1, activation='sigmoid')(dropout2)'''
 
                 out1 = Dense(1, activation='sigmoid')(x)
                 mid2 = Dense(1, activation='sigmoid')(x)
@@ -389,7 +374,7 @@ class PredictDescriptionModelLSTM:
                 model = Model(inputs=comment_input, outputs=[out1, out2])           # , out3])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
-                              loss_weights=[1.5, 1],
+                              loss_weights=[3, 1],
                               metrics=['accuracy'])
 
             elif len(self.y_train) == 3:
@@ -444,10 +429,6 @@ class PredictDescriptionModelLSTM:
 
             self.logging.info(model.summary())
 
-            # TODO change to number of classes: 3-> self.num_classification_classes
-            # model.add(Dense(3, activation='softmax'))
-            # model.compile(loss='categorical_crossentropy', optimizer=self.optimizer, metrics=['accuracy'])
-
         # single class classification (e.g. Bad-Good)
         # keras sequential model
         elif not self.multi_class_configuration_dict['multi_class_bool']:
@@ -460,7 +441,7 @@ class PredictDescriptionModelLSTM:
             else:
                 embedding_layer = Embedding(self.max_features, self.embedding_size)  # train word embedding as well
 
-            if not self.attention_configuration_dict['use_attention_bool']:
+            if not self.attention_configuration_dict['use_attention_bool']:     # "regular"
 
                 model.add(embedding_layer)
                 model.add(LSTM(
@@ -483,9 +464,6 @@ class PredictDescriptionModelLSTM:
                 from keras.models import *
                 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Activation
 
-                # inputs = Input(shape=(self.maxlen, ), dtype='int32')
-                # embedded_sequences = embedding_layer(inputs)
-
                 # AttentionWithContext()(lstm_layer)
                 model.add(embedding_layer)
                 model.add(LSTM(
@@ -494,10 +472,7 @@ class PredictDescriptionModelLSTM:
                     recurrent_dropout=self.recurrent_dropout,
                     return_sequences=True))
                 model.add(AttentionWithContext())
-                # attention_pl = AttentionWithContext()
                 model.add(Dense(1, activation='sigmoid'))
-
-                # try using different optimizers and different optimizer configs
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
                               metrics=['accuracy'])
@@ -506,45 +481,116 @@ class PredictDescriptionModelLSTM:
 
         return model
 
-    # a. load pre trained glove
-    # b. compute embedding matrix
-    # c. build embedding layer
     def _add_pre_trained_embedding(self):
+        """
+            a. load pre trained glove/word2vec
+            b. compute embedding matrix
+            c. build embedding layer
+        :return: embedding layer
+        """
 
-        # a. load pre trained glove
-        GLOVE_DIR = '../data/golve_pretrained/glove.6B'
-        glove_suffix_name = 'glove.6B.' + str(self.embedding_size) + 'd.txt'
-        import os
-        import numpy as np
+        if self.embedding_type == 'glove':
+            self.logging.info('use pre-trained glove word2vec')
+            # a. load pre trained glove
+            GLOVE_DIR = '../data/golve_pretrained/glove.6B'
+            glove_suffix_name = 'glove.6B.' + str(self.embedding_size) + 'd.txt'
+            import os
+            import numpy as np
 
-        embeddings_index = {}
-        f = open(os.path.join(GLOVE_DIR, glove_suffix_name))    # 'glove.6B.100d.txt'))
-        for line in f:
-            values = line.split()
-            word = values[0]
-            coefs = np.asarray(values[1:], dtype='float32')
-            embeddings_index[word] = coefs
-        f.close()
+            embeddings_index = {}
+            f = open(os.path.join(GLOVE_DIR, glove_suffix_name))    # 'glove.6B.100d.txt'))
+            for line in f:
+                values = line.split()
+                word = values[0]
+                coefs = np.asarray(values[1:], dtype='float32')
+                embeddings_index[word] = coefs
+            f.close()
 
-        self.logging.info('')
-        self.logging.info('Found %s word vectors.' % len(embeddings_index))
+            self.logging.info('')
+            self.logging.info('Found %s word vectors.' % len(embeddings_index))
 
-        # b. compute embedding matrix
-        embedding_matrix = np.zeros((len(self.word_index) + 1, self.embedding_size))
-        for word, i in self.word_index.items():
-            embedding_vector = embeddings_index.get(word)
-            if embedding_vector is not None:
-                # words not found in embedding index will be all-zeros.
-                embedding_matrix[i] = embedding_vector
+            # b. compute embedding matrix
+            embedding_matrix = np.zeros((len(self.word_index) + 1, self.embedding_size))
+            cnt = 0
+            for word, i in self.word_index.items():
+                embedding_vector = embeddings_index.get(word)
+                if embedding_vector is not None:
+                    # words not found in embedding index will be all-zeros.
+                    embedding_matrix[i] = embedding_vector
 
-        # c. build embedding layer
-        from keras.layers import Embedding
-        embedding_layer = Embedding(len(self.word_index) + 1,
-                                    self.embedding_size,
-                                    weights=[embedding_matrix],
-                                    input_length=self.maxlen,
-                                    trainable=False)
+            # c. build embedding layer
+            from keras.layers import Embedding
+            embedding_layer = Embedding(len(self.word_index) + 1,
+                                        self.embedding_size,
+                                        weights=[embedding_matrix],
+                                        input_length=self.maxlen,
+                                        trainable=False)
 
+        elif self.embedding_type == 'gensim':
+            self.logging.info('use pre-trained gensim word2vec')
+
+            import gzip
+            import gensim
+            from keras.layers import Embedding
+            import numpy as np
+
+            fname = '../data/word2vec_pretrained/fashion/d_300_k_1341062_w_10_e_100_v_fashion'
+            self.logging.info('load word2vec path: ' + str(fname))
+            model = gensim.models.Word2Vec.load(fname)
+            pretrained_weights = model.wv.syn0
+            vocab_size, vector_dim = pretrained_weights.shape
+
+            method = 3
+            if method == 1:
+                self.logging.info('word2vec attempt to fit into embedding layer - middle complex')
+                # convert the wv word vectors into a numpy matrix that is suitable for insertion
+                # into our TensorFlow and Keras models
+
+                embedding_matrix = np.zeros((len(model.wv.vocab), vector_dim))
+                for i in range(len(model.wv.vocab)):
+                    embedding_vector = model.wv[model.wv.index2word[i]]
+                    if embedding_vector is not None:
+                        embedding_matrix[i] = embedding_vector
+
+                embedding_layer = Embedding(input_dim=embedding_matrix.shape[0],
+                                            output_dim=embedding_matrix.shape[1],
+                                            # input_length=self.maxlen,
+                                            weights=[embedding_matrix],
+                                            trainable=False)
+            elif method == 2:
+                self.logging.info('word2vec simple embedding matching - simple complex')
+                embedding_layer = Embedding(input_dim=vocab_size,
+                                            output_dim=vector_dim,
+                                            input_length=self.maxlen,
+                                            weights=[pretrained_weights],
+                                            trainable=False)
+            elif method == 3:
+
+                self.logging.info('word2vec match using word_index from keras tokenizer - as used in glove match above')
+                # b. compute embedding matrix
+
+                # sd = 1 / np.sqrt(len(self.word_index) + 1)
+                # embedding_matrix = np.random.normal(0, scale=sd, size=(len(self.word_index) + 1, self.embedding_size))
+
+                embedding_matrix = np.zeros((len(self.word_index) + 1, self.embedding_size))
+
+                for word, i in self.word_index.items():
+                    if word in model.wv:
+                        embedding_vector = model.wv[word]
+                        embedding_matrix[i] = embedding_vector
+
+                # c. build embedding layer
+                from keras.layers import Embedding
+                embedding_layer = Embedding(len(self.word_index) + 1,
+                                            self.embedding_size,
+                                            weights=[embedding_matrix],
+                                            input_length=self.maxlen,
+                                            trainable=False)
+            else:
+                raise ValueError('unknown method value')
+
+        else:
+            raise ValueError('unknown embedding type')
         self.logging.info('create glove pre-trained embedding: ' + str(self.embedding_size))
         return embedding_layer
 
@@ -938,6 +984,7 @@ class PredictDescriptionModelLSTM:
                         '_embedding=' + str(self.embedding_size) + \
                         '_lstm_hidden=' + str(self.lstm_hidden_layer) + \
                         '_pre_trained=' + str(self.embedding_pre_trained) + \
+                        '_pre_trained_type=' + str(self.embedding_type) + \
                         '_epoch=' + str(self.num_epoch) + \
                         '_dropout=' + str(self.dropout) + \
                         '_multi=' + str(self.multi_class_configuration_dict['multi_class_bool']) + \

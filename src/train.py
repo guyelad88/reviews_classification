@@ -17,7 +17,7 @@ class TrainModel:
 
     def __init__(self, input_data_file, vertical_type, output_results_folder, tensor_board_dir, lstm_parameters_dict,
                  df_configuration_dict, multi_class_configuration_dict, attention_configuration_dict,
-                 cv_configuration, test_size, embedding_pre_trained, logging=None):
+                 cv_configuration, test_size, embedding_pre_trained, embedding_type, logging=None):
 
         # file arguments
         self.input_data_file = input_data_file              # csv input file
@@ -32,6 +32,7 @@ class TrainModel:
         self.cv_configuration = cv_configuration            # cross-validation configuration
         self.multi_class_configuration_dict = multi_class_configuration_dict       # multi-class bool
         self.attention_configuration_dict = attention_configuration_dict           # attention keys
+        self.embedding_type = embedding_type
 
         self.verbose_flag = True
         self.logging = logging
@@ -266,6 +267,7 @@ class TrainModel:
             self.attention_configuration_dict,      # configuration fot attention
             self.tensor_board_dir,
             self.embedding_pre_trained,     # Boolean value
+            self.embedding_type,
             self.vertical_type              # vertical fashion/motors
         )
 
@@ -299,7 +301,10 @@ class TrainModel:
             if cur_auc > max_auc_val:
                 max_auc_val = cur_auc
 
-        self._plot_multi_roc_curve('best', 'max')
+        # folder name using "best" epoch with all folds
+        cur_auc = self._plot_multi_roc_curve('best', 'max')     # create best AUC (different epoch in each fold)
+        max_auc_val = cur_auc
+
         # save statistic using pickle into
         self._save_roc_statistic_to_pickle_file()
 
@@ -430,6 +435,7 @@ class TrainModel:
                       '_embedding=' + str(self.lstm_parameters_dict['embedding_size']) + \
                       '_lstm_hidden=' + str(self.lstm_parameters_dict['lstm_hidden_layer']) + \
                       '_pre_trained=' + str(self.embedding_pre_trained) + \
+                      '_pre_trained_type=' + str(self.embedding_type) + \
                       '_epoch=' + str(self.lstm_parameters_dict['num_epoch']) + \
                       '_dropout=' + str(self.lstm_parameters_dict['dropout']) + \
                       '_multi=' + str(self.multi_class_configuration_dict['multi_class_bool']) + \
