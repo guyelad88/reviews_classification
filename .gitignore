@@ -7,7 +7,6 @@ ion
 *.DS_Store
 *.pyc
 *.pyo
-*.csv
 
 # specific folder names
 **/glove_pretrained
