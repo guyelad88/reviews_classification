@@ -186,7 +186,7 @@ if __name__ == '__main__':
     }
 
     multi_class_configuration_dict = {
-        'multi_class_bool': False,      # whether to do single/multi class classification
+        'multi_class_bool': True,      # whether to do single/multi class classification
         'multi_class_label': ['review_tag', 'subjective_sentence']  # ['review_tag', 'missing_context'] ['review_tag', 'subjective_sentence'] # , 'missing_context']
     }
 
