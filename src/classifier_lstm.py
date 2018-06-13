@@ -211,7 +211,7 @@ class PredictDescriptionModelLSTM:
 
         self.tensor_board_dir = tensor_board_dir                        # bool - if to use tensor board
         self.embedding_pre_trained = embedding_pre_trained              # bool - if to use pre trained embedding
-        self.embedding_type = embedding_type                            # glove or gensim
+        self.embedding_type = embedding_type                            # dict: type(glove or gensim), path to WV
         self.vertical_type = vertical_type                              # vertical type
 
         # initialize global variable
@@ -272,15 +272,19 @@ class PredictDescriptionModelLSTM:
         from keras.preprocessing import text
 
         t = text.Tokenizer(num_words=self.max_num_words,                            # max words in tokenizer
-                           filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
+                           filters="!'#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n",
                            lower=True,
                            split=" ",
                            char_level=False,
-                           oov_token=None)
+                           oov_token='UNK')
 
         # fit the tokenizer on the documents
         t.fit_on_texts(self.x_train)
 
+        self.logging.info('')
+        self.logging.info('token properties: ')
+        self.logging.info('filter using: ' + str("!'#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n"))
+        self.logging.info('OOV token: ' + str('UNK'))
         # print tokenizer results
         # self.logging.info('# docs: ' + str(t.document_count))
         # self.logging.info('t word index: ' + str(t.word_index))
@@ -357,6 +361,13 @@ class PredictDescriptionModelLSTM:
             comment_input = Input(shape=(self.maxlen,))
             embedding_layer = self._add_pre_trained_embedding()
             embedded_sequences = embedding_layer(comment_input)
+
+            self.logging.info('')
+            self.logging.info('LSTM properties: ')
+            self.logging.info('num hidden neurons: ' + str(self.lstm_hidden_layer))
+            self.logging.info('dropout: ' + str(self.dropout))
+            self.logging.info('recurrent_dropout: ' + str(self.recurrent_dropout))
+
             lstm_layer = (LSTM(
                     self.lstm_hidden_layer,
                     dropout=self.dropout,
@@ -367,14 +378,15 @@ class PredictDescriptionModelLSTM:
                 x = lstm_layer(embedded_sequences)
 
                 out1 = Dense(1, activation='sigmoid')(x)
-                mid2 = Dense(1, activation='sigmoid')(x)
-                con_layer = Concatenate()([out1, mid2])
-                out2 = Dense(1, activation='sigmoid')(con_layer)
+                out2 = Dense(1, activation='sigmoid')(x)
+                # mid2 = Dense(1, activation='sigmoid')(x)
+                # con_layer = Concatenate()([out1, mid2])
+                # out2 = Dense(1, activation='sigmoid')(con_layer)
 
                 model = Model(inputs=comment_input, outputs=[out1, out2])           # , out3])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
-                              loss_weights=[3, 1],
+                              loss_weights=[4, 1],
                               metrics=['accuracy'])
 
             elif len(self.y_train) == 3:
@@ -401,7 +413,7 @@ class PredictDescriptionModelLSTM:
                 model = Model(inputs=comment_input, outputs=[out1, out2, out3])  # , out3])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
-                              loss_weights=[2, 1, 1],
+                              loss_weights=[4, 1, 1],
                               metrics=['accuracy'])
 
             elif len(self.y_train) == 5:
@@ -489,7 +501,7 @@ class PredictDescriptionModelLSTM:
         :return: embedding layer
         """
 
-        if self.embedding_type == 'glove':
+        if self.embedding_type['type'] == 'glove':
             self.logging.info('use pre-trained glove word2vec')
             # a. load pre trained glove
             GLOVE_DIR = '../data/golve_pretrained/glove.6B'
@@ -515,8 +527,11 @@ class PredictDescriptionModelLSTM:
             for word, i in self.word_index.items():
                 embedding_vector = embeddings_index.get(word)
                 if embedding_vector is not None:
-                    # words not found in embedding index will be all-zeros.
-                    embedding_matrix[i] = embedding_vector
+                    embedding_matrix[i] = embedding_vector  # words not found in embedding index will be all-zeros.
+                else:
+                    self.logging.info('token in train missing in word2vec: ' + str(word))
+                    cnt += 1
+            self.logging.info('total tokens missing: ' + str(cnt) + ' / ' + str(len(self.word_index)))
 
             # c. build embedding layer
             from keras.layers import Embedding
@@ -526,7 +541,7 @@ class PredictDescriptionModelLSTM:
                                         input_length=self.maxlen,
                                         trainable=False)
 
-        elif self.embedding_type == 'gensim':
+        elif self.embedding_type['type'] == 'gensim':
             self.logging.info('use pre-trained gensim word2vec')
 
             import gzip
@@ -534,9 +549,11 @@ class PredictDescriptionModelLSTM:
             from keras.layers import Embedding
             import numpy as np
 
-            fname = '../data/word2vec_pretrained/fashion/d_300_k_1341062_w_10_e_100_v_fashion'
-            self.logging.info('load word2vec path: ' + str(fname))
-            model = gensim.models.Word2Vec.load(fname)
+            # fname = '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'
+            # fname = '../data/word2vec_pretrained/fashion/d_300_k_1341062_w_6_e_70_v_fashion'
+
+            self.logging.info('load word2vec path: ' + str(self.embedding_type['path']))
+            model = gensim.models.Word2Vec.load(self.embedding_type['path'])
             pretrained_weights = model.wv.syn0
             vocab_size, vector_dim = pretrained_weights.shape
 
@@ -573,11 +590,16 @@ class PredictDescriptionModelLSTM:
                 # embedding_matrix = np.random.normal(0, scale=sd, size=(len(self.word_index) + 1, self.embedding_size))
 
                 embedding_matrix = np.zeros((len(self.word_index) + 1, self.embedding_size))
-
+                cnt = 0
                 for word, i in self.word_index.items():
                     if word in model.wv:
                         embedding_vector = model.wv[word]
                         embedding_matrix[i] = embedding_vector
+                    else:
+                        self.logging.info('token in train missing in word2vec: ' + str(word))
+                        cnt += 1
+                self.logging.info('total tokens missing: ' + str(cnt))
+
 
                 # c. build embedding layer
                 from keras.layers import Embedding
@@ -984,7 +1006,7 @@ class PredictDescriptionModelLSTM:
                         '_embedding=' + str(self.embedding_size) + \
                         '_lstm_hidden=' + str(self.lstm_hidden_layer) + \
                         '_pre_trained=' + str(self.embedding_pre_trained) + \
-                        '_pre_trained_type=' + str(self.embedding_type) + \
+                        '_pre_trained_type=' + str(self.embedding_type['type']) + \
                         '_epoch=' + str(self.num_epoch) + \
                         '_dropout=' + str(self.dropout) + \
                         '_multi=' + str(self.multi_class_configuration_dict['multi_class_bool']) + \

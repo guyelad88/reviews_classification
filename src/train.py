@@ -435,7 +435,7 @@ class TrainModel:
                       '_embedding=' + str(self.lstm_parameters_dict['embedding_size']) + \
                       '_lstm_hidden=' + str(self.lstm_parameters_dict['lstm_hidden_layer']) + \
                       '_pre_trained=' + str(self.embedding_pre_trained) + \
-                      '_pre_trained_type=' + str(self.embedding_type) + \
+                      '_pre_trained_type=' + str(self.embedding_type['type']) + \
                       '_epoch=' + str(self.lstm_parameters_dict['num_epoch']) + \
                       '_dropout=' + str(self.lstm_parameters_dict['dropout']) + \
                       '_multi=' + str(self.multi_class_configuration_dict['multi_class_bool']) + \

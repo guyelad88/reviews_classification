@@ -31,12 +31,15 @@ class CleanData:
     def init_debug_log(self):
         import logging
 
-        lod_file_name = '/Users/sguyelad/PycharmProjects/reviews_classifier/log/' + 'clean_data_' + str(self.cur_time) + '.log'
+        lod_file_name = './log/' + 'clean_data_' + str(self.cur_time) + '.log'
 
         logging.basicConfig(filename=lod_file_name,
                             format='%(asctime)s, %(levelname)s %(message)s',
                             datefmt='%H:%M:%S',
                             level=logging.DEBUG)
+        import os
+        if not os.path.exists(lod_file_name):
+            os.makedirs(lod_file_name)
 
         # print result in addition to log file
         if self.verbose_flag:

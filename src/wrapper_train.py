@@ -47,7 +47,7 @@ class WrapperTrainModel:
     def init_debug_log(self):
         import logging
 
-        lod_dir = '/Users/sguyelad/PycharmProjects/reviews_classifier/log/wrapper_train/'
+        lod_dir = './log/wrapper_train/'
 
         log_file_name = str(self.cur_time) + \
                         '_vertical=' + str(self.vertical_type) + \
@@ -74,16 +74,19 @@ class WrapperTrainModel:
     def check_input(self):
 
         # glove embedding size must be one of '50', '100', '200', '300'
-        if self.embedding_pre_trained and self.embedding_type == 'glove':
+        '''if self.embedding_pre_trained and self.embedding_type == 'glove':
             for e_s in self.lstm_parameters_dict['embedding_size']:
                 if e_s not in [50, 100, 200, 300]:
-                    raise('glove embedding size must be one of [50, 100, 200, 300]')
+                    raise('glove embedding size must be one of [50, 100, 200, 300]')'''
+
+        if 'type' not in embedding_type or 'path' not in embedding_type:
+            raise ValueError('embedding type must contain path and type key')
 
         if self.lstm_parameters_dict['optimizer'] not in ['adam', 'rmsprop']:
-            raise('unknown optimizer')
+            raise ValueError('unknown optimizer')
 
         if self.multi_class_configuration_dict['multi_class_bool'] and self.attention_configuration_dict['use_attention_bool']:
-            raise('currently attention model is only support for single class classification')
+            raise ValueError('currently attention model is only support for single class classification')
 
         return
 
@@ -111,7 +114,7 @@ class WrapperTrainModel:
                             'lstm_hidden_layer': lstm_hidden_layer,    # TODO change to different values
                             'num_epoch': self.lstm_parameters_dict['num_epoch'],
                             'dropout': dropout,  # 0.2
-                            'recurrent_dropout': dropout,  # 0.2
+                            'recurrent_dropout': self.lstm_parameters_dict['recurrent_dropout'],  # 0.2
                             'tensor_board_bool': self.lstm_parameters_dict['tensor_board_bool'],
                             'max_num_words': self.lstm_parameters_dict['max_num_words'],
                             'optimizer': self.lstm_parameters_dict['optimizer'],
@@ -165,12 +168,17 @@ def main(input_data_file, vertical_type, output_results_folder, tensor_board_dir
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'fashion'       # 'fashion'/'motors'
+    vertical_type = 'fashion'  # 'fashion'/'motors'
     output_results_folder = '../results/'
     tensor_board_dir = '../results/tensor_board_graph/'
     test_size = 0.2
     embedding_pre_trained = True
-    embedding_type = 'gensim'   # 'glove', 'gensim'
+    embedding_type = {
+        'type': 'gensim',   # 'glove', 'gensim'
+        # 'path': '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'       # path to gensim wv
+        'path': '../data/word2vec_pretrained/fashion/d_100_k_1341062_w_10_e_60_v_fashion'
+    }
+    # fashion wv path = '../data/word2vec_pretrained/fashion/d_300_k_1341062_w_6_e_70_v_fashion'
 
     cv_configuration = {
         'use_cv_bool': True,
@@ -178,9 +186,8 @@ if __name__ == '__main__':
     }
 
     multi_class_configuration_dict = {
-        'multi_class_bool': True,      # whether to do single/multi class classification
-        'multi_class_label': ['review_tag',
-                              'subjective_sentence']  # 'missing_context', 'Refers to a specific listing aspect', 'Non-informative sentence']
+        'multi_class_bool': False,      # whether to do single/multi class classification
+        'multi_class_label': ['review_tag', 'subjective_sentence']  # ['review_tag', 'missing_context'] ['review_tag', 'subjective_sentence'] # , 'missing_context']
     }
 
     attention_configuration_dict = {
@@ -200,13 +207,13 @@ if __name__ == '__main__':
         'max_features': 200000,
         'maxlen': [20],  # 20      # [8, 10, 15, 20],
         'batch_size': [32],  # 32
-        'embedding_size': 300,  # no more list
-        'lstm_hidden_layer': [400],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
+        'embedding_size': 100,  # fit to word2vec version dimension
+        'lstm_hidden_layer': [450, 300, 375],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
         'num_epoch': 30,
-        'dropout': [0.5],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
-        'recurrent_dropout': [0.3],  # TODO currently does not use in the model
-        'optimizer': 'rmsprop',    # 'rmsprop'
-        'patience': 5,
+        'dropout': [0.38, 0.33, 0.23],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'recurrent_dropout': 0.1,  # TODO currently does not use in the model
+        'optimizer': 'rmsprop',    # 'rmsprop' 'adam'
+        'patience': 3,
         'tensor_board_bool': True,
         'max_num_words': None  # number of words allow in the tokenizer process - keras text tokenizer
     }

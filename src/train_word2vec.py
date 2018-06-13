@@ -8,14 +8,25 @@ import gensim
 
 
 class TrainWord2Vec:
-    '''
-    this class run different configurations.
-    input:
-        1. configuration properties to check
-    output:
-        1. hyper-parameters tuning using grid search
-        2. call to inner class (train) to check every configuration
-    '''
+    """
+    This class has two purpose:
+    1. create clean data-set, will use next as input to word2vec algorithm
+    2. create word vector (word2vec)
+
+    purpose (1/2) defined using flags
+        create_data_set
+        create_word_embedding
+
+    :argument
+        embedding_size: word vector dimensions
+        window: pair selection into word2vec network
+        epoch: number of epochs to train
+
+    :return
+    1. save clean data using pickle in data/word2vec_input_data/
+    2. save word2vec model (using gensim library) in data/wor2vec_pretrained/
+
+    """
 
     def __init__(self, input_data_file, vertical_type, output_results_folder, word2vec_parameters_dict):
 
@@ -38,7 +49,7 @@ class TrainWord2Vec:
     def init_debug_log(self):
         import logging
 
-        lod_dir = '/Users/sguyelad/PycharmProjects/reviews_classifier/log/train_word2vec/'
+        lod_dir = './log/train_word2vec/'
         log_file_name = str(self.cur_time) + '.log'
         import os
         if not os.path.exists(lod_dir):
@@ -277,9 +288,9 @@ if __name__ == '__main__':
 
     output_results_folder = '../data/word2vec_pretrained/'
     word2vec_parameters_dict = {
-        'embedding_size': 300,
+        'embedding_size': 100,
         'window': 10,
-        'epoch': 100
+        'epoch': 60
     }
     create_data_set = False
     create_word_embedding = True
