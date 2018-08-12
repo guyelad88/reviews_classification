@@ -168,15 +168,17 @@ def main(input_data_file, vertical_type, output_results_folder, tensor_board_dir
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'fashion'  # 'fashion'/'motors'
+    vertical_type = 'motors'  # 'fashion'/'motors'
     output_results_folder = '../results/'
     tensor_board_dir = '../results/tensor_board_graph/'
     test_size = 0.2
     embedding_pre_trained = True
     embedding_type = {
-        'type': 'gensim',   # 'glove', 'gensim'
-        # 'path': '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'       # path to gensim wv
-        'path': '../data/word2vec_pretrained/fashion/d_100_k_1341062_w_10_e_60_v_fashion'
+        'type': 'glove',   # 'glove', 'gensim'
+        'path': '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'       # path to gensim wv
+        # 'path': '../data/word2vec_pretrained/fashion/d_100_k_1341062_w_10_e_60_v_fashion'
+
+        # 'path_dor': '../data/word2vec_amazon_pretrained/model.bin'
     }
     # fashion wv path = '../data/word2vec_pretrained/fashion/d_300_k_1341062_w_6_e_70_v_fashion'
 
@@ -208,9 +210,9 @@ if __name__ == '__main__':
         'maxlen': [20],  # 20      # [8, 10, 15, 20],
         'batch_size': [32],  # 32
         'embedding_size': 100,  # fit to word2vec version dimension
-        'lstm_hidden_layer': [450, 300, 375],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
+        'lstm_hidden_layer': [100, 150, 250, 300, 400],  # , 450],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
         'num_epoch': 30,
-        'dropout': [0.38, 0.33, 0.23],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'dropout': [0.28, 0.23],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
         'recurrent_dropout': 0.1,  # TODO currently does not use in the model
         'optimizer': 'rmsprop',    # 'rmsprop' 'adam'
         'patience': 3,
@@ -218,14 +220,34 @@ if __name__ == '__main__':
         'max_num_words': None  # number of words allow in the tokenizer process - keras text tokenizer
     }
 
+    # quick hyper-parameters tuning
+    """
+    lstm_parameters_dict = {
+        'max_features': 200000,
+        'maxlen': [10],  # 20      # [8, 10, 15, 20],
+        'batch_size': [128],  # 32
+        'embedding_size': 100,  # fit to word2vec version dimension
+        'lstm_hidden_layer': [150],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
+        'num_epoch': 10,
+        'dropout': [0.38, 0.33, 0.23],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'recurrent_dropout': 0.1,  # TODO currently does not use in the model
+        'optimizer': 'rmsprop',    # 'rmsprop' 'adam'
+        'patience': 1,
+        'tensor_board_bool': True,
+        'max_num_words': None  # number of words allow in the tokenizer process - keras text tokenizer
+    }
+    """
+
     if vertical_type == 'fashion':
         input_data_file = '../data/clean/clean_data_fashion.csv'
         input_data_file = '../data/clean/clean_data_multi_fashion.csv'
         input_data_file = '../data/clean/clean_data_multi_new_fashion.csv'
+        input_data_file = '../data/clean/clean_data_multi_balanced.csv'
 
     elif vertical_type == 'motors':
         input_data_file = '../data/clean/clean_data_motors.csv'
         input_data_file = '../data/clean/clean_data_multi_new_motors.csv'
+        input_data_file = '../data/clean/clean_data_motors_multi_balanced.csv'
 
     else:
         raise()

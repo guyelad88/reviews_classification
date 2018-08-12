@@ -1,10 +1,12 @@
 from __future__ import print_function
 
 global_auc_list = list()            # global list which store auc per epoch to find max auc
+global_ap_list = list()            # global list which store auc per epoch to find max auc
 
 # structure as follow
 # fold -> epoch -> fpr, tpr, auc
 global_statistic_auc_dict = dict()
+global_statistic_ap_dict = dict()
 
 # save best epoch for every fold
 global_max_auc_epoch_dict = {
@@ -12,9 +14,19 @@ global_max_auc_epoch_dict = {
     'epoch': None
 }
 
+global_max_ap_epoch_dict = {
+    'ap': 0,
+    'epoch': None
+}
+
+import matplotlib.pyplot as plt
+
 from keras import backend as K
 from keras.engine.topology import Layer
 from keras import initializers, regularizers, constraints
+
+from sklearn.metrics import average_precision_score, precision_recall_curve, precision_score, recall_score
+
 
 ############################################## attention with context ##############################################
 
@@ -218,12 +230,25 @@ class PredictDescriptionModelLSTM:
         global global_auc_list  # update global variable
         global_auc_list = list()
 
+        # initialize global variable
+        global global_ap_list  # update global variable
+        global_ap_list = list()
+
         global global_statistic_auc_dict
         global_statistic_auc_dict = dict()
+
+        global global_statistic_ap_dict
+        global_statistic_ap_dict = dict()
 
         global global_max_auc_epoch_dict
         global_max_auc_epoch_dict = {
             'auc': 0,
+            'epoch': None
+        }
+
+        global global_max_ap_epoch_dict
+        global_max_ap_epoch_dict = {
+            'ap': 0,
             'epoch': None
         }
 
@@ -263,7 +288,7 @@ class PredictDescriptionModelLSTM:
         self.prepare_data()                             # tokenizer, fit
         self.model()     # build model and train + inference it
 
-        return global_statistic_auc_dict, global_max_auc_epoch_dict
+        return global_statistic_auc_dict, global_max_auc_epoch_dict, global_statistic_ap_dict, global_max_ap_epoch_dict
         # return test_score, test_accuracy
 
     # tokenizer sentences by keras and prepare them to lstm model
@@ -504,7 +529,7 @@ class PredictDescriptionModelLSTM:
         if self.embedding_type['type'] == 'glove':
             self.logging.info('use pre-trained glove word2vec')
             # a. load pre trained glove
-            GLOVE_DIR = '../data/golve_pretrained/glove.6B'
+            GLOVE_DIR = '../data/glove_pretrained/glove.6B'
             glove_suffix_name = 'glove.6B.' + str(self.embedding_size) + 'd.txt'
             import os
             import numpy as np
@@ -529,7 +554,7 @@ class PredictDescriptionModelLSTM:
                 if embedding_vector is not None:
                     embedding_matrix[i] = embedding_vector  # words not found in embedding index will be all-zeros.
                 else:
-                    self.logging.info('token in train missing in word2vec: ' + str(word))
+                    # self.logging.info('token in train missing in word2vec: ' + str(word))
                     cnt += 1
             self.logging.info('total tokens missing: ' + str(cnt) + ' / ' + str(len(self.word_index)))
 
@@ -596,7 +621,7 @@ class PredictDescriptionModelLSTM:
                         embedding_vector = model.wv[word]
                         embedding_matrix[i] = embedding_vector
                     else:
-                        self.logging.info('token in train missing in word2vec: ' + str(word))
+                        # self.logging.info('token in train missing in word2vec: ' + str(word))
                         cnt += 1
                 self.logging.info('total tokens missing: ' + str(cnt))
 
@@ -683,6 +708,12 @@ class PredictDescriptionModelLSTM:
                         y_pred_val = self.model.predict(self.x_val)[idx]
                         auc_test = roc_auc_score(self.y_val[idx], y_pred_val)
 
+                        avg_precision_score_train = average_precision_score(self.y[idx], y_pred)
+                        avg_precision_score_test = average_precision_score(self.y_val[idx], y_pred_val)
+
+                        precision_train_th, recall_train_th, _ = precision_recall_curve(self.y[idx], y_pred)
+                        precision_test_th, recall_test_th, _ = precision_recall_curve(self.y_val[idx], y_pred_val)
+
                         test_metric = self.model.evaluate(
                             self.x_val,
                             self.y_val,
@@ -703,12 +734,14 @@ class PredictDescriptionModelLSTM:
                         self.logging.info('class name: ' + str(self.class_names[idx]))
                         self.logging.info('train:')
                         self.logging.info('train AUC: ' + str(round(auc_train, 3)))
+                        self.logging.info('train Avg precision: ' + str(round(avg_precision_score_train, 3)))
                         self.logging.info('train accuracy: ' + str(round(train_accuracy, 3)))
                         self.logging.info('train loss: ' + str(round(train_loss, 3)))
 
                         self.logging.info('')
                         self.logging.info('test:')
                         self.logging.info('test AUC: ' + str(round(auc_test, 3)))
+                        self.logging.info('test Avg precision: ' + str(round(avg_precision_score_test, 3)))
                         self.logging.info('test accuracy: ' + str(round(test_accuracy, 3)))
                         self.logging.info('test loss: ' + str(round(test_loss, 3)))
 
@@ -718,7 +751,20 @@ class PredictDescriptionModelLSTM:
                             PredictDescriptionModelLSTM.store_roc_results(self.fold_counter, fpr_test, tpr_test, auc_test,
                                                                           epoch + 1, self.logging)
 
+                            PredictDescriptionModelLSTM.store_pr_results(self.fold_counter, precision_test_th, recall_test_th,
+                                                                         avg_precision_score_test,
+                                                                          epoch + 1, self.logging)
+
                         PredictDescriptionModelLSTM.plot_roc_curve(fpr_test, tpr_test, auc_test, self.class_names[idx], file_suffix,
+                                                                   self.logging, epoch=epoch + 1,
+                                                                   vertical_type=self.vertical_type,
+                                                                   y_positive_name=self.y_positive_name,
+                                                                   fold_counter=self.fold_counter,
+                                                                   class_name=self.class_names[idx])
+
+                        PredictDescriptionModelLSTM.plot_pr_curve(precision_test_th, recall_test_th,
+                                                                  avg_precision_score_test,
+                                                                  self.class_names[idx], file_suffix,
                                                                    self.logging, epoch=epoch + 1,
                                                                    vertical_type=self.vertical_type,
                                                                    y_positive_name=self.y_positive_name,
@@ -731,6 +777,12 @@ class PredictDescriptionModelLSTM:
 
                     y_pred_val = self.model.predict(self.x_val)
                     auc_test = roc_auc_score(self.y_val, y_pred_val)
+
+                    avg_precision_score_train = average_precision_score(self.y, y_pred)
+                    avg_precision_score_test = average_precision_score(self.y_val, y_pred_val)
+
+                    precision_train_th, recall_train_th, _ = precision_recall_curve(self.y, y_pred)
+                    precision_test_th, recall_test_th, _ = precision_recall_curve(self.y_val, y_pred_val)
 
                     test_loss, test_accuracy = self.model.evaluate(
                         self.x_val,
@@ -748,12 +800,14 @@ class PredictDescriptionModelLSTM:
                     self.logging.info('')
                     self.logging.info('train:')
                     self.logging.info('train AUC: ' + str(round(auc_train, 3)))
+                    self.logging.info('train Avg precision: ' + str(round(avg_precision_score_train, 3)))
                     self.logging.info('train accuracy: ' + str(round(train_accuracy, 3)))
                     self.logging.info('train loss: ' + str(round(train_loss, 3)))
 
                     self.logging.info('')
                     self.logging.info('test:')
                     self.logging.info('test AUC: ' + str(round(auc_test, 3)))
+                    self.logging.info('test Avg precision: ' + str(round(avg_precision_score_test, 3)))
                     self.logging.info('test accuracy: ' + str(round(test_accuracy, 3)))
                     self.logging.info('test loss: ' + str(round(test_loss, 3)))
 
@@ -762,11 +816,23 @@ class PredictDescriptionModelLSTM:
                     PredictDescriptionModelLSTM.store_roc_results(self.fold_counter, fpr_test, tpr_test, auc_test,
                                                                   epoch+1, self.logging)
 
+                    PredictDescriptionModelLSTM.store_pr_results(self.fold_counter, precision_test_th, recall_test_th,
+                                                                 avg_precision_score_test,
+                                                                 epoch + 1, self.logging)
+
                     PredictDescriptionModelLSTM.plot_roc_curve(fpr_test, tpr_test, auc_test, 'test', file_suffix,
                                                                self.logging, epoch=epoch+1,
                                                                vertical_type=self.vertical_type,
                                                                y_positive_name=self.y_positive_name,
                                                                fold_counter=self.fold_counter)
+
+                    PredictDescriptionModelLSTM.plot_pr_curve(precision_test_th, recall_test_th,
+                                                              avg_precision_score_test,
+                                                              'review_tag', file_suffix,
+                                                              self.logging, epoch=epoch + 1,
+                                                              vertical_type=self.vertical_type,
+                                                              y_positive_name=self.y_positive_name,
+                                                              fold_counter=self.fold_counter)
 
                 confusion_matrix_bool = False
                 if confusion_matrix_bool:
@@ -874,15 +940,19 @@ class PredictDescriptionModelLSTM:
         global global_auc_list
         max_auc = max(global_auc_list)      # max auc epoch score
 
+        global global_ap_list
+        max_ap = max(global_ap_list)  # max auc epoch score
+
         import os
         self.logging.info('')
         self.logging.info('max test auc: ' + str(round(max_auc, 3)))
+        self.logging.info('max test ap: ' + str(round(max_ap, 3)))
 
         # change dir name (add best auc score)
         file_suffix = self._get_file_suffix()
 
         #  new directory name with AUC score
-        new_dir = '../results/ROC/' + \
+        new_dir_auc = '../results/ROC/' + \
                   str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' + \
                   file_suffix + '/' + \
                   str(round(max_auc, 3)) + '_' + str(self.fold_counter) + '/'
@@ -891,10 +961,23 @@ class PredictDescriptionModelLSTM:
                   str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' +
                   file_suffix + '/' +
                   str(self.fold_counter) + '/',
-                  new_dir)
+                  new_dir_auc)
+
+        #  new directory name with AUC score
+        new_dir_ap = '../results/PR/' + \
+                  str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' + \
+                  file_suffix + '/' + \
+                  str(round(max_ap, 3)) + '_' + str(self.fold_counter) + '/'
+        print(new_dir_ap)
+        os.rename('../results/PR/' +
+                  str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' +
+                  file_suffix + '/' +
+                  str(self.fold_counter) + '/',
+                  new_dir_ap)
 
         self.logging.info('')
-        self.logging.info('change dir name: ' + new_dir)
+        self.logging.info('change dir name: ' + new_dir_auc)
+        self.logging.info('change dir name: ' + new_dir_ap)
 
         return
 
@@ -968,6 +1051,57 @@ class PredictDescriptionModelLSTM:
         logging.info('save ROC plot: ' + str(plot_path))
         return
 
+    # plot ROC plot
+    @classmethod
+    def plot_pr_curve(cls, precision, recall, AP, type_data, file_suffix, logging, epoch, vertical_type, y_positive_name,
+                       fold_counter, class_name=None):
+
+        logging.info('*****************************  PR curve  *************************************')
+
+        # store only the positive class
+        if type_data == 'review_tag':
+            global global_ap_list  # update global variable
+            global_ap_list.append(AP)
+            logging.info('global AP: ' + str(global_ap_list))
+
+        plt.figure()
+        lw = 2
+        plt.step(recall,
+                 precision,
+                 color='b',
+                 alpha=0.2,
+                 where='post')
+
+        plt.fill_between(recall, precision, step='post', alpha=0.2,
+                         color='b')
+
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.01])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+        plt.title('Precision Recall curve: {0:0.3f}'.format(AP))
+        import os
+        plot_dir = '../results/PR/' +\
+                   str(vertical_type) + '_' + str(y_positive_name) + '/' \
+                   + str(file_suffix) + '/' \
+                   + str(fold_counter) + '/'
+
+        if class_name is not None:
+            plot_dir = plot_dir + str(class_name) + '/'
+
+        if not os.path.exists(plot_dir):
+            os.makedirs(plot_dir)
+
+        plot_path = plot_dir \
+                    + str(round(AP, 3)) + \
+                    '_epoch=' + str(epoch) + '_' + \
+                    str(type_data)
+
+        plt.savefig(plot_path + '.png')
+        plt.close()
+        logging.info('save PR-curve plot: ' + str(plot_path))
+        return
+
     # store statistic results (later after all fold will finished to run, I'll calculate meta statistics)
     @classmethod
     def store_roc_results(cls, fold_counter, fpr_test, tpr_test, auc_test, epoch, logging):
@@ -991,7 +1125,27 @@ class PredictDescriptionModelLSTM:
         logging.info('')
         logging.info('store statistic roc results, epoch number: ' + str(epoch))
 
-        return
+    @classmethod
+    def store_pr_results(cls, fold_counter, precision, recall, ap, epoch, logging):
+
+        global global_statistic_ap_dict  # update global variable
+
+        # if fold_counter not in global_statistic_ap_dict:
+        #     global_statistic_ap_dict[fold_counter] = {}
+
+        global_statistic_ap_dict[epoch] = {
+            'precision': precision,
+            'recall': recall,
+            'ap': ap
+        }
+
+        global global_max_ap_epoch_dict
+        if ap > global_max_ap_epoch_dict['ap']:
+            global_max_ap_epoch_dict['ap'] = ap
+            global_max_ap_epoch_dict['epoch'] = epoch
+
+        logging.info('')
+        logging.info('store statistic ap results, epoch number: ' + str(epoch))
 
     # @classmethod
     # def calculate_confusion_matrix(cls):

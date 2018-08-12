@@ -7,6 +7,7 @@ ion
 *.DS_Store
 *.pyc
 *.pyo
+*.ipynb
 
 # specific folder names
 **/glove_pretrained
@@ -17,6 +18,7 @@ ion
 **/ROC
 **/statistics
 **/tensor_board_graph
+**/data
 
 
 # recommendation from stack overflow

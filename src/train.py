@@ -48,6 +48,9 @@ class TrainModel:
         self.roc_result_dict_all_folds = dict()         # contain all stats for all folds and epochs
         self.roc_max_result_auc_epoch_dict = dict()     # mapping of max auc -> epoch
 
+        self.ap_result_dict_all_folds = dict()  # contain all stats for all folds and epochs
+        self.pr_max_result_ap_epoch_dict = dict()  # mapping of max auc -> epoch
+
         self.plt_list_colors = [
             'darkkhaki',
             'blue',
@@ -129,11 +132,13 @@ class TrainModel:
         if self.cv_configuration['use_cv_bool']:
             self._lstm_model_cv()
             self._calculate_average_auc()
+            self._calculate_average_ap()
 
         # split into test-train
         elif not self.cv_configuration['use_cv_bool']:
             self._lstm_model_regular()
             self._calculate_average_auc()
+            self._calculate_average_ap()
         else:
             raise('unknown split method')
 
@@ -271,14 +276,21 @@ class TrainModel:
             self.vertical_type              # vertical fashion/motors
         )
 
-        roc_statistic_results_dict, global_max_auc_epoch_dict = lstm_obj.run_experiment()
+        roc_statistic_results_dict, global_max_auc_epoch_dict, pr_statistic_ap_dict, global_max_ap_epoch_dict =\
+            lstm_obj.run_experiment()
 
         import copy
         cur_dict = copy.deepcopy(roc_statistic_results_dict)
         cur_max_dict = copy.deepcopy(global_max_auc_epoch_dict)     # map max auc -> epoch
 
+        cur_dict_ap = copy.deepcopy(pr_statistic_ap_dict)
+        cur_max_ap_dict = copy.deepcopy(global_max_ap_epoch_dict)
+
         self.roc_result_dict_all_folds[fold_counter] = cur_dict
         self.roc_max_result_auc_epoch_dict[fold_counter] = cur_max_dict
+
+        self.ap_result_dict_all_folds[fold_counter] = cur_dict_ap
+        self.pr_max_result_ap_epoch_dict[fold_counter] = cur_max_ap_dict
 
         logging.info('finish LSTM model')
 
@@ -293,7 +305,6 @@ class TrainModel:
 
         logging.info('')
         logging.info('*********************************** ROC global dict ****************************************')
-        # logging.info(self.roc_result_dict_all_folds)
         max_auc_val = 0
         for cur_epoch in xrange(self.lstm_parameters_dict['num_epoch']):
             # cur_epoch + 1
@@ -310,6 +321,29 @@ class TrainModel:
 
         # should be last (change file suffix directory)
         self._change_dir_name(max_auc_val)
+
+        return
+
+    def _calculate_average_ap(self):
+
+        logging.info('')
+        logging.info('*********************************** PR global dict ****************************************')
+        max_ap_val = 0
+        for cur_epoch in xrange(self.lstm_parameters_dict['num_epoch']):
+            # cur_epoch + 1
+            cur_ap = self._plot_multi_pr_curve(cur_epoch + 1, 'regular')
+            if cur_ap > max_ap_val:
+                max_ap_val = cur_ap
+
+        # folder name using "best" epoch with all folds
+        cur_ap = self._plot_multi_pr_curve('best', 'max')     # create best AUC (different epoch in each fold)
+        max_ap_val = cur_ap
+
+        # save statistic using pickle into
+        # self._save_roc_statistic_to_pickle_file()
+
+        # should be last (change file suffix directory)
+        self._change_dir_name_ap(max_ap_val)
 
         return
 
@@ -335,6 +369,28 @@ class TrainModel:
 
         return
 
+    # change dir name to prefix with max auc
+    def _change_dir_name_ap(self, max_ap):
+
+        import os
+
+        file_suffix = self._get_file_suffix()
+
+        #  new directory name with AUC score
+        new_dir = '../results/PR/' + \
+                  str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' + \
+                  str(round(max_ap, 3)) + '_' + file_suffix + '/'
+
+        os.rename('../results/PR/' +
+                  str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' +
+                  file_suffix + '/',
+                  new_dir)
+
+        self.logging.info('')
+        self.logging.info('change dir name: ' + new_dir)
+
+        return
+
     # TODO save using file_suffix generic
     def _save_roc_statistic_to_pickle_file(self):
 
@@ -351,6 +407,12 @@ class TrainModel:
 
         with open(plot_dir + 'max_ROC_statistic_pickle.txt', 'w') as file:
             file.write(pickle.dumps(self.roc_max_result_auc_epoch_dict))
+
+        with open(plot_dir + 'max_AP_statistic_pickle.txt', 'w') as file:
+            file.write(pickle.dumps(self.pr_max_result_ap_epoch_dict))
+
+        with open(plot_dir + 'PR_statistic_pickle.txt', 'w') as file:
+            file.write(pickle.dumps(self.ap_result_dict_all_folds))
 
         return
 
@@ -424,6 +486,84 @@ class TrainModel:
         logging.info('save ROC plot: ' + str(plot_path))
 
         return mean_auc
+
+    # plot multi auc plot for a specific epoch
+
+    def _plot_multi_pr_curve(self, epoch, type):
+
+        logging.info('*****************************  multi pr plot for epoch  *************************************')
+        logging.info('current epoch: ' + str(epoch))
+
+        import matplotlib.pyplot as plt
+        plt.figure()
+
+        lw = 2
+
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.01])
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+
+        num_pr = 0
+        total_pr = 0.0
+        if type == 'max':
+            for fold_num, pr_epoch_dict in self.pr_max_result_ap_epoch_dict.iteritems():  # fold -> auc, epoch
+                max_epoch_dict = self.ap_result_dict_all_folds[fold_num][pr_epoch_dict['epoch']]
+                num_pr += 1
+                total_pr += max_epoch_dict['ap']
+                plt.step(max_epoch_dict['recall'],
+                         max_epoch_dict['precision'],
+                         color=self.plt_list_colors[fold_num],
+                         alpha=0.6,
+                         where='post',
+                         label='Fold: ' + str(fold_num) + ', epoch:' + str(pr_epoch_dict['epoch']) + ' - (AP = %0.3f)' %
+                               pr_epoch_dict['ap']
+                         )
+                # plt.fill_between(max_epoch_dict['recall'], max_epoch_dict['precision'], step='post', alpha=0.2, color='b')
+
+        else:
+            for fold_num, epoch_dict in self.ap_result_dict_all_folds.iteritems():
+                if epoch in epoch_dict:
+                    num_pr += 1
+                    total_pr += epoch_dict[epoch]['ap']
+
+                    plt.step(epoch_dict[epoch]['recall'],
+                             epoch_dict[epoch]['precision'],
+                             color=self.plt_list_colors[fold_num],
+                             alpha=0.6,
+                             where='post',
+                             label='Fold: ' + str(fold_num) + ' - (AP = %0.3f)' % epoch_dict[epoch]['ap'])
+
+                     # plt.fill_between(epoch_dict[epoch]['recall'], epoch_dict[epoch]['precision'], step='post', alpha=0.2, color='b')
+
+        if num_pr > 0:
+            mean_ap = float(total_pr) / float(num_pr)
+        else:  # epoch without any result in all folds (due to early stopping)
+            plt.close()
+            return
+
+        plt.title('AP - epoch number: ' + str(epoch) + ', ' + str(round(mean_ap, 3)))
+        plt.legend(loc="lower right")
+
+        file_suffix = self._get_file_suffix()
+
+        import os
+        plot_dir = '../results/PR/' + \
+                   str(self.vertical_type) + '_' + str(self.df_configuration_dict['y_positive_name']) + '/' \
+                   + str(file_suffix) + '/' + 'ap_cv' + '/'
+
+        if not os.path.exists(plot_dir):
+            os.makedirs(plot_dir)
+
+        plot_path = plot_dir \
+                    + str(round(mean_ap, 3)) + \
+                    '_epoch=' + str(epoch)
+
+        plt.savefig(plot_path + '.png')
+        plt.close()
+        logging.info('save PR plot: ' + str(plot_path))
+
+        return mean_ap
 
     # TODO merge with same function from classifier_lstm.py
     # TODO maybe, calculate this and pass it inside the inner class
