@@ -97,29 +97,33 @@ class TrainModel:
 
     # df pre-processing
     # change target column to 1-0 (target columns is defined from wrapper_train)
-    # after current function data is ready to split and to build lstm network
+    # after current function, data is ready to split and build LSTM network
     def df_pre_processing(self):
 
         self.logging.info('')
         self.logging.info('pre-processing df to fit models')
-        self.logging.info('target column name: ' + str(self.df_configuration_dict['y_column']))
-        self.logging.info('positive group value: ' + str(self.df_configuration_dict['y_positive']))
+        self.logging.info('target column name: {}'.format(str(self.df_configuration_dict['y_column'])))
+        self.logging.info('positive group value: {}'.format(str(self.df_configuration_dict['y_positive'])))
 
         # one vs. all method
         # change positive group to 1, otherwise to 0
         self.df[self.df_configuration_dict['y_column']] = np.where(
             self.df[self.df_configuration_dict['y_column']] == self.df_configuration_dict['y_positive'], 1, 0)
 
+        # statistics on target feature (failure reason or good)
         self.logging.info('')
         self.logging.info('Tagging analysis (Y)')
         y_group = self.df.groupby([self.df_configuration_dict['y_column']])
         for group_type, tag_group in y_group:
             group_percentage = float(tag_group.shape[0]) / float(self.df.shape[0])
-            logging.info('Tag: ' + str(group_type) + ', amount: ' + str(tag_group.shape[0]) + ', percentage: ' + str(
-                round(group_percentage, 3)))
+
+            logging.info('Tag: {}, amount: {}, percentage: {}'.format(
+                str(group_type),
+                str(tag_group.shape[0]),
+                str(round(group_percentage, 3))
+            ))
 
         self.logging.info('')
-        return
 
     ########################################## run lstm for all folds ##########################################
 
@@ -131,8 +135,9 @@ class TrainModel:
         # cross validation mode
         if self.cv_configuration['use_cv_bool']:
             self._lstm_model_cv()
-            self._calculate_average_auc()
-            self._calculate_average_ap()
+            avg_auc, best_auc_list = self._calculate_average_auc()
+            avg_ap, best_ap_list = self._calculate_average_ap()
+            self._insert_results_to_xls(avg_auc, avg_ap, best_auc_list, best_ap_list)
 
         # split into test-train
         elif not self.cv_configuration['use_cv_bool']:
@@ -140,9 +145,7 @@ class TrainModel:
             self._calculate_average_auc()
             self._calculate_average_ap()
         else:
-            raise('unknown split method')
-
-        return
+            raise ValueError('unknown split method - must be a boolean value')
 
     # lstm using cross validation
     def _lstm_model_cv(self):
@@ -151,14 +154,18 @@ class TrainModel:
 
         stratified_kfold = StratifiedKFold(n_splits=self.cv_configuration['num_fold'], shuffle=True)
         fold_counter = 1
+
+        # iterate over each one of the folds
+
         for train, test in stratified_kfold.split(
                 self.df[self.df_configuration_dict['x_column']],
                 self.df[self.df_configuration_dict['y_column']]
         ):
+
             logging.info('')
-            logging.info('split CV: ' + str(fold_counter))
+            logging.info('split CV: {}'.format(str(fold_counter)))
             logging.info('')
-            logging.info('test indices: ' + str(test[:10]))
+            logging.info('test indices: {}'.format(str(test[:10])))
             logging.info('train size=' + str(self.df[self.df_configuration_dict['y_column']][train].shape[0]) +
                          ', ratio_good=' + str(
                 round(self.df[self.df_configuration_dict['y_column']][train].mean(), 3)) +
@@ -172,6 +179,8 @@ class TrainModel:
                 1 - round(self.df[self.df_configuration_dict['y_column']][test].mean(), 3)))
 
             x_train = self.df[self.df_configuration_dict['x_column']][train]
+
+            # using MTL
             if self.multi_class_configuration_dict['multi_class_bool']:
                 y_train_df = \
                 self.df[self.multi_class_configuration_dict['multi_class_label']].iloc[train]
@@ -179,6 +188,7 @@ class TrainModel:
                 for class_name in self.multi_class_configuration_dict['multi_class_label']:
                     y_train.append(y_train_df[class_name])
 
+            # MTL is false
             else:
                 y_train = self.df[self.df_configuration_dict['y_column']][train]
 
@@ -286,15 +296,16 @@ class TrainModel:
         cur_dict_ap = copy.deepcopy(pr_statistic_ap_dict)
         cur_max_ap_dict = copy.deepcopy(global_max_ap_epoch_dict)
 
+        # save AUC results
         self.roc_result_dict_all_folds[fold_counter] = cur_dict
         self.roc_max_result_auc_epoch_dict[fold_counter] = cur_max_dict
 
+        # save average precision results
         self.ap_result_dict_all_folds[fold_counter] = cur_dict_ap
         self.pr_max_result_ap_epoch_dict[fold_counter] = cur_max_ap_dict
 
         logging.info('finish LSTM model')
 
-        return
 
     ########################################## analyze lstm results ##########################################
 
@@ -306,15 +317,17 @@ class TrainModel:
         logging.info('')
         logging.info('*********************************** ROC global dict ****************************************')
         max_auc_val = 0
-        for cur_epoch in xrange(self.lstm_parameters_dict['num_epoch']):
+        '''for cur_epoch in xrange(self.lstm_parameters_dict['num_epoch']):
             # cur_epoch + 1
-            cur_auc = self._plot_multi_roc_curve(cur_epoch + 1, 'regular')
+            logging.info(cur_epoch)
+            logging.info(self.lstm_parameters_dict['num_epoch'])
+            cur_auc, best_auc_list = self._plot_multi_roc_curve(cur_epoch + 1, 'regular')
             if cur_auc > max_auc_val:
-                max_auc_val = cur_auc
+                max_auc_val = cur_auc'''
 
         # folder name using "best" epoch with all folds
-        cur_auc = self._plot_multi_roc_curve('best', 'max')     # create best AUC (different epoch in each fold)
-        max_auc_val = cur_auc
+        cur_auc, best_auc_list = self._plot_multi_roc_curve('best', 'max')     # create best AUC (different epoch in each fold)
+        max_auc_val = cur_auc           # AVG of best AUC for each fold
 
         # save statistic using pickle into
         self._save_roc_statistic_to_pickle_file()
@@ -322,30 +335,82 @@ class TrainModel:
         # should be last (change file suffix directory)
         self._change_dir_name(max_auc_val)
 
-        return
+        return max_auc_val, best_auc_list
 
     def _calculate_average_ap(self):
 
         logging.info('')
         logging.info('*********************************** PR global dict ****************************************')
         max_ap_val = 0
-        for cur_epoch in xrange(self.lstm_parameters_dict['num_epoch']):
+        '''for cur_epoch in xrange(self.lstm_parameters_dict['num_epoch']):
             # cur_epoch + 1
-            cur_ap = self._plot_multi_pr_curve(cur_epoch + 1, 'regular')
+            cur_ap, best_ap_list = self._plot_multi_pr_curve(cur_epoch + 1, 'regular')
             if cur_ap > max_ap_val:
-                max_ap_val = cur_ap
+                max_ap_val = cur_ap'''
 
         # folder name using "best" epoch with all folds
-        cur_ap = self._plot_multi_pr_curve('best', 'max')     # create best AUC (different epoch in each fold)
-        max_ap_val = cur_ap
+        cur_ap, best_ap_list = self._plot_multi_pr_curve('best', 'max')     # create best AUC (different epoch in each fold)
+        max_ap_val = cur_ap         # avg of best ap for each fold
 
         # save statistic using pickle into
         # self._save_roc_statistic_to_pickle_file()
 
         # should be last (change file suffix directory)
         self._change_dir_name_ap(max_ap_val)
+        return max_ap_val, best_ap_list
 
-        return
+    # insert results into excel file - ro compare best configuration later
+    # TODO build this insertion function
+    def _insert_results_to_xls(self, avg_auc, avg_ap, best_auc_list, best_ap_list):
+        """
+        insert a new row into xls result file
+        :param avg_auc: avg of best auc of K folds
+        :param avg_ap: avg of best ap of K folds
+        :param best_auc_list: list of K auc results
+        :param best_ap_list: list of K ap results
+        :return:
+        """
+        xls_file_path = '../results/summarized_results/{}.xlsx'.format(self.vertical_type)
+        import csv
+        from openpyxl import load_workbook
+
+        row_data = [
+            self.vertical_type,     # 'vertical'
+            self.lstm_parameters_dict['maxlen'],                                    # 'sentence_maxlen'
+            self.lstm_parameters_dict['batch_size'],                                # batch_size
+            self.embedding_type['d'],                                               # embedding_size
+            self.embedding_type['w'],                                               # embedding_window
+            self.embedding_type['e'],                                               # embedding_epochs
+            self.lstm_parameters_dict['lstm_hidden_layer'],                         # LSTM_hidden_size
+            self.lstm_parameters_dict['dropout'],                                   # dropout
+            self.lstm_parameters_dict['recurrent_dropout'],                         # recurrant_dropout
+            self.lstm_parameters_dict['optimizer'],                                 # optimizer
+            self.lstm_parameters_dict['num_epoch'],                                 # max_epoch
+            self.multi_class_configuration_dict['multi_class_bool'],                # MTL_bool
+            self.attention_configuration_dict['use_attention_bool'],                # attention_bool
+            '  '.join(self.multi_class_configuration_dict['multi_class_label']),    # MTL_class_name
+            len(self.multi_class_configuration_dict['multi_class_label']),          # MTL_num_classes
+            '  '.join(str(x) for x in self.multi_class_configuration_dict['loss_weights']),     # MTL_weights
+            str(round(avg_auc, 3)),                                                 # AUC
+            str(round(avg_ap, 3)),                                                  # average_precision
+            '  '.join(str(round(x, 4)) for x in best_auc_list),                     # k_fold_auc_score
+            '  '.join(str(round(x, 4)) for x in best_ap_list)                       # k_fold_ap_score
+        ]
+
+        assert len(row_data) == 20                # check number of col inserted in the new row
+
+        wb = load_workbook(xls_file_path)
+        ws = wb.worksheets[0]
+        ws.append(row_data)
+        wb.save(xls_file_path)
+
+
+        """
+        with open(csv_file_path, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(col_values)
+        """
+        logging.info('insert a new row to summarized file')
 
     # change dir name to prefix with max auc
     def _change_dir_name(self, max_auc):
@@ -435,11 +500,14 @@ class TrainModel:
 
         num_auc = 0
         total_auc = 0.0
+        best_auc_list = list()
+
         if type == 'max':
             for fold_num, auc_epoch_dict in self.roc_max_result_auc_epoch_dict.iteritems():     # fold -> auc, epoch
                 max_epoch_dict = self.roc_result_dict_all_folds[fold_num][auc_epoch_dict['epoch']]
                 num_auc += 1
                 total_auc += max_epoch_dict['auc']
+                best_auc_list.append(max_epoch_dict['auc'])
                 plt.plot(
                     max_epoch_dict['fpr'],
                     max_epoch_dict['tpr'],
@@ -485,12 +553,14 @@ class TrainModel:
         plt.close()
         logging.info('save ROC plot: ' + str(plot_path))
 
-        return mean_auc
+        return mean_auc, best_auc_list
 
     # plot multi auc plot for a specific epoch
 
     def _plot_multi_pr_curve(self, epoch, type):
-
+        """
+        :return: avg PR of all folds, list with K PR results
+        """
         logging.info('*****************************  multi pr plot for epoch  *************************************')
         logging.info('current epoch: ' + str(epoch))
 
@@ -506,11 +576,13 @@ class TrainModel:
 
         num_pr = 0
         total_pr = 0.0
+        best_pr_list = list()
         if type == 'max':
             for fold_num, pr_epoch_dict in self.pr_max_result_ap_epoch_dict.iteritems():  # fold -> auc, epoch
                 max_epoch_dict = self.ap_result_dict_all_folds[fold_num][pr_epoch_dict['epoch']]
                 num_pr += 1
                 total_pr += max_epoch_dict['ap']
+                best_pr_list.append(max_epoch_dict['ap'])
                 plt.step(max_epoch_dict['recall'],
                          max_epoch_dict['precision'],
                          color=self.plt_list_colors[fold_num],
@@ -563,7 +635,7 @@ class TrainModel:
         plt.close()
         logging.info('save PR plot: ' + str(plot_path))
 
-        return mean_ap
+        return mean_ap, best_pr_list
 
     # TODO merge with same function from classifier_lstm.py
     # TODO maybe, calculate this and pass it inside the inner class

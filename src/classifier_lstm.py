@@ -145,6 +145,7 @@ class AttentionWithContext(Layer):
 
 
 class PredictDescriptionModelLSTM:
+
     '''
         this class build and evaluate model for a given configuration.
         input:
@@ -157,6 +158,7 @@ class PredictDescriptionModelLSTM:
             3. tensor board graph
                 3.1 under directory ../results/tensor_board_graph
     '''
+
     def __init__(self,
                  file_directory,
                  logging,
@@ -398,8 +400,13 @@ class PredictDescriptionModelLSTM:
                     dropout=self.dropout,
                     recurrent_dropout=self.recurrent_dropout
             ))
+
+            self.logging.info('cls names: {}'.format(self.multi_class_configuration_dict['multi_class_label']))
+            self.logging.info('cls loss weights: {}'.format(self.multi_class_configuration_dict['loss_weights']))
+
             if len(self.y_train) == 2:
                 self.logging.info('multi-task with 2 outputs')
+
                 x = lstm_layer(embedded_sequences)
 
                 out1 = Dense(1, activation='sigmoid')(x)
@@ -411,7 +418,7 @@ class PredictDescriptionModelLSTM:
                 model = Model(inputs=comment_input, outputs=[out1, out2])           # , out3])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
-                              loss_weights=[4, 1],
+                              loss_weights=self.multi_class_configuration_dict['loss_weights'],
                               metrics=['accuracy'])
 
             elif len(self.y_train) == 3:
@@ -438,7 +445,7 @@ class PredictDescriptionModelLSTM:
                 model = Model(inputs=comment_input, outputs=[out1, out2, out3])  # , out3])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
-                              loss_weights=[4, 1, 1],
+                              loss_weights=self.multi_class_configuration_dict['loss_weights'],
                               metrics=['accuracy'])
 
             elif len(self.y_train) == 5:
@@ -459,7 +466,7 @@ class PredictDescriptionModelLSTM:
                 model = Model(inputs=comment_input, outputs=[out1, out2, out3, out4, out5])  # , out3])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
-                              loss_weights=[3, 1, 1, 1, 1],
+                              loss_weights=self.multi_class_configuration_dict['loss_weights'],
                               metrics=['accuracy'])
             else:
                 raise('multi-task support 2 or 3 or 5 output classes')

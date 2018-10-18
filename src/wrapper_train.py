@@ -5,14 +5,14 @@ from train import TrainModel
 
 
 class WrapperTrainModel:
-    '''
+    """
     this class run different configurations.
     input:
         1. configuration properties to check
     output:
         1. hyper-parameters tuning using grid search
         2. call to inner class (train) to check every configuration
-    '''
+    """
 
     def __init__(self, input_data_file, vertical_type, output_results_folder, tensor_board_dir, lstm_parameters_dict,
                  df_configuration_dict, cv_configuration, test_size, embedding_pre_trained,
@@ -49,10 +49,12 @@ class WrapperTrainModel:
 
         lod_dir = './log/wrapper_train/'
 
-        log_file_name = str(self.cur_time) + \
-                        '_vertical=' + str(self.vertical_type) + \
-                        '_group=' + str(self.df_configuration_dict['y_positive_name']) + \
-                        '_optimizer=' + str(self.lstm_parameters_dict['optimizer']) + '.log'
+        log_file_name = '{}_vertical={}_group={}_optimizer={}.log'.format(
+                            str(self.cur_time),
+                            str(self.vertical_type),
+                            str(self.df_configuration_dict['y_positive_name']),
+                            str(self.lstm_parameters_dict['optimizer'])
+                        )
         import os
         if not os.path.exists(lod_dir):
             os.makedirs(lod_dir)
@@ -88,7 +90,12 @@ class WrapperTrainModel:
         if self.multi_class_configuration_dict['multi_class_bool'] and self.attention_configuration_dict['use_attention_bool']:
             raise ValueError('currently attention model is only support for single class classification')
 
-        return
+        if not self.cv_configuration['use_cv_bool']:
+            raise ValueError('CV bool must be true')
+
+        if len(self.multi_class_configuration_dict['multi_class_label']) != len(self.multi_class_configuration_dict['loss_weights']):
+            raise ValueError('MTL class numbers miss-match')
+
 
     # iterate over all configuration, build model for each
     def run_wrapper_model(self):
@@ -114,7 +121,7 @@ class WrapperTrainModel:
                             'lstm_hidden_layer': lstm_hidden_layer,    # TODO change to different values
                             'num_epoch': self.lstm_parameters_dict['num_epoch'],
                             'dropout': dropout,  # 0.2
-                            'recurrent_dropout': self.lstm_parameters_dict['recurrent_dropout'],  # 0.2
+                            'recurrent_dropout': self.lstm_parameters_dict['recurrent_dropout'],
                             'tensor_board_bool': self.lstm_parameters_dict['tensor_board_bool'],
                             'max_num_words': self.lstm_parameters_dict['max_num_words'],
                             'optimizer': self.lstm_parameters_dict['optimizer'],
@@ -168,16 +175,18 @@ def main(input_data_file, vertical_type, output_results_folder, tensor_board_dir
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'motors'  # 'fashion'/'motors'
+    vertical_type = 'fashion'  # 'fashion'/'motors'
     output_results_folder = '../results/'
     tensor_board_dir = '../results/tensor_board_graph/'
     test_size = 0.2
     embedding_pre_trained = True
     embedding_type = {
-        'type': 'glove',   # 'glove', 'gensim'
-        'path': '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'       # path to gensim wv
-        # 'path': '../data/word2vec_pretrained/fashion/d_100_k_1341062_w_10_e_60_v_fashion'
-
+        'type': 'gensim',   # 'glove', 'gensim'
+        # 'path': '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'       # path to gensim wv
+        'path': '../data/word2vec_pretrained/fashion/d_100_k_1341062_w_10_e_60_v_fashion',
+        'd': 100,
+        'w': 10,
+        'e': 60
         # 'path_dor': '../data/word2vec_amazon_pretrained/model.bin'
     }
     # fashion wv path = '../data/word2vec_pretrained/fashion/d_300_k_1341062_w_6_e_70_v_fashion'
@@ -187,9 +196,18 @@ if __name__ == '__main__':
         'num_fold': 5
     }
 
+    # possible columns names:
+    # 'subjective_sentence'	'missing_context' 'Refers to a specific listing aspect'
+    # 'Non-informative sentence' 'failure_reason'
+
     multi_class_configuration_dict = {
-        'multi_class_bool': True,      # whether to do single/multi class classification
-        'multi_class_label': ['review_tag', 'subjective_sentence']  # ['review_tag', 'missing_context'] ['review_tag', 'subjective_sentence'] # , 'missing_context']
+        'multi_class_bool': True,                                   # whether to do single/multi class classification
+        'multi_class_label': [
+            'review_tag', 'subjective_sentence', 'missing_context'
+        ],
+        # 'Non-informative sentence', 'Refers to a specific listing aspect', 'review_tag', 'subjective_sentence', 'missing_context'],      # ['review_tag', 'missing_context'] ['review_tag', 'subjective_sentence']
+        # 'multi_class_label': ['subjective_sentence', 'review_tag', 'missing_context'],
+        'loss_weights': [4, 1, 1]
     }
 
     attention_configuration_dict = {
@@ -205,19 +223,34 @@ if __name__ == '__main__':
     }
 
     # quick hyper-parameters tuning
-    lstm_parameters_dict = {
+    """lstm_parameters_dict = {
         'max_features': 200000,
-        'maxlen': [20],  # 20      # [8, 10, 15, 20],
-        'batch_size': [32],  # 32
-        'embedding_size': 100,  # fit to word2vec version dimension
-        'lstm_hidden_layer': [100, 150, 250, 300, 400],  # , 450],     # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
+        'maxlen': [20],                 # 20      # [8, 10, 15, 20],
+        'batch_size': [32],            # 32
+        'embedding_size': 100,          # fit to word2vec version dimension
+        'lstm_hidden_layer': [150, 250, 350, 450],  # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
         'num_epoch': 30,
-        'dropout': [0.28, 0.23],    # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
-        'recurrent_dropout': 0.1,  # TODO currently does not use in the model
-        'optimizer': 'rmsprop',    # 'rmsprop' 'adam'
+        'dropout': [0.28, 0.23, 0.33],  # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'recurrent_dropout': 0.1,       # TODO currently does not use in the model
+        'optimizer': 'rmsprop',         # 'rmsprop'/'adam'
         'patience': 3,
         'tensor_board_bool': True,
-        'max_num_words': None  # number of words allow in the tokenizer process - keras text tokenizer
+        'max_num_words': None           # number of words allow in the tokenizer process - keras text tokenizer
+    }"""
+
+    lstm_parameters_dict = {
+        'max_features': 200000,
+        'maxlen': [20],                 # 20      # [8, 10, 15, 20],
+        'batch_size': [128],            # 32
+        'embedding_size': 100,          # fit to word2vec version dimension
+        'lstm_hidden_layer': [150, 300, 450],  # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
+        'num_epoch': 30,
+        'dropout': [0.28, 0.23, 0.33],  # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'recurrent_dropout': 0.1,       # TODO currently does not use in the model
+        'optimizer': 'rmsprop',         # 'rmsprop'/'adam'
+        'patience': 3,
+        'tensor_board_bool': True,
+        'max_num_words': None           # number of words allow in the tokenizer process - keras text tokenizer
     }
 
     # quick hyper-parameters tuning
@@ -242,12 +275,12 @@ if __name__ == '__main__':
         input_data_file = '../data/clean/clean_data_fashion.csv'
         input_data_file = '../data/clean/clean_data_multi_fashion.csv'
         input_data_file = '../data/clean/clean_data_multi_new_fashion.csv'
-        input_data_file = '../data/clean/clean_data_multi_balanced.csv'
+        # input_data_file = '../data/clean/clean_data_multi_balanced.csv'
 
     elif vertical_type == 'motors':
         input_data_file = '../data/clean/clean_data_motors.csv'
         input_data_file = '../data/clean/clean_data_multi_new_motors.csv'
-        input_data_file = '../data/clean/clean_data_motors_multi_balanced.csv'
+        # input_data_file = '../data/clean/clean_data_motors_multi_balanced.csv'
 
     else:
         raise()

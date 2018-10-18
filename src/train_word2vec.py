@@ -2,8 +2,6 @@ from __future__ import print_function
 import os
 import logging
 import pandas as pd
-import numpy as np
-import gzip
 import gensim
 
 
@@ -239,7 +237,6 @@ class TrainWord2Vec:
         word2vec_dir = self.output_results_folder + str(vertical_type) + '/'
         hist_path = word2vec_dir + str(len(documents)) + '_histogram.png'
         plt.savefig(hist_path)
-
 
     def _load_glove(self):
         """
