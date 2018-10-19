@@ -460,26 +460,34 @@ class PredictDescriptionModelLSTM:
 
             elif len(self.y_train) == 5:
                 self.logging.info('multi-task with 5 outputs')
+                self.logging.info('independent MTL output')
+
                 x = lstm_layer(embedded_sequences)
 
-                sub = Dense(16)(x)
-                sub1 = Dropout(self.dropout)(sub)
+                sub1 = Dense(16)(x)
+                sub2 = Dense(16)(x)
+                sub3 = Dense(16)(x)
+                sub4 = Dense(16)(x)
+                sub5 = Dense(16)(x)
+                dropout1 = Dropout(self.dropout)(sub1)
+                dropout2 = Dropout(self.dropout)(sub2)
+                dropout3 = Dropout(self.dropout)(sub3)
+                dropout4 = Dropout(self.dropout)(sub4)
+                dropout5 = Dropout(self.dropout)(sub5)
 
-                out2 = Dense(1, activation='sigmoid')(sub1)
-                out3 = Dense(1, activation='sigmoid')(sub1)
-                out4 = Dense(1, activation='sigmoid')(sub1)
-                out5 = Dense(1, activation='sigmoid')(sub1)
+                out1 = Dense(1, activation='sigmoid')(dropout1)
+                out2 = Dense(1, activation='sigmoid')(dropout2)
+                out3 = Dense(1, activation='sigmoid')(dropout3)
+                out4 = Dense(1, activation='sigmoid')(dropout4)
+                out5 = Dense(1, activation='sigmoid')(dropout5)
 
-                con_layer = Concatenate()([out2, out3, out4, out5, sub1])
-                out1 = Dense(1, activation='sigmoid')(con_layer)
-
-                model = Model(inputs=comment_input, outputs=[out1, out2, out3, out4, out5])  # , out3])
+                model = Model(inputs=comment_input, outputs=[out1, out2, out3, out4, out5])
                 model.compile(loss='binary_crossentropy',
                               optimizer=self.optimizer,
                               loss_weights=self.multi_class_configuration_dict['loss_weights'],
                               metrics=['accuracy'])
             else:
-                raise('multi-task support 2 or 3 or 5 output classes')
+                raise ValueError('multi-task support 2 or 3 or 5 output classes')
 
             self.logging.info(model.summary())
 
