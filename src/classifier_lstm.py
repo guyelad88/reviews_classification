@@ -432,15 +432,25 @@ class PredictDescriptionModelLSTM:
                 dropout2 = Dropout(self.dropout)(sub2)
                 dropout3 = Dropout(self.dropout)(sub3)
 
-                out1 = Dense(1, activation='sigmoid')(dropout1)
+                structure = False
+                if structure:
+                    self.logging.info('structure MTL output')
 
-                mid2 = Dense(1, activation='sigmoid')(dropout2)
-                con_layer = Concatenate()([out1, mid2])
-                out2 = Dense(1, activation='sigmoid')(con_layer)
+                    out1 = Dense(1, activation='sigmoid')(dropout1)
 
-                mid3 = Dense(1, activation='sigmoid')(dropout3)
-                con_layer_3 = Concatenate()([out1, out2, mid3])
-                out3 = Dense(1, activation='sigmoid')(con_layer_3)
+                    mid2 = Dense(1, activation='sigmoid')(dropout2)
+                    con_layer = Concatenate()([out1, mid2])
+                    out2 = Dense(1, activation='sigmoid')(con_layer)
+
+                    mid3 = Dense(1, activation='sigmoid')(dropout3)
+                    con_layer_3 = Concatenate()([out1, out2, mid3])
+                    out3 = Dense(1, activation='sigmoid')(con_layer_3)
+
+                else:
+                    self.logging.info('independent MTL output')
+                    out1 = Dense(1, activation='sigmoid')(dropout1)
+                    out2 = Dense(1, activation='sigmoid')(dropout2)
+                    out3 = Dense(1, activation='sigmoid')(dropout3)
 
                 model = Model(inputs=comment_input, outputs=[out1, out2, out3])  # , out3])
                 model.compile(loss='binary_crossentropy',
