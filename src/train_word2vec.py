@@ -279,9 +279,9 @@ def main(input_data_file, vertical_type, output_results_folder, word2vec_paramet
 if __name__ == '__main__':
 
     # input file name
-    vertical_type = 'fashion'                    # 'fashion'/'motors'
-    # input_data_file = '../data/word2vec_input_data/motors/712904.txt'     # 1341062
-    input_data_file = '../data/word2vec_input_data/fashion/1341062.txt'  # 1341062
+    vertical_type = 'motors'                    # 'fashion'/'motors'
+    input_data_file = '../data/word2vec_input_data/motors/712904.txt'     # 1341062
+    # input_data_file = '../data/word2vec_input_data/fashion/1341062.txt'  # 1341062
 
     output_results_folder = '../data/word2vec_pretrained/'
     word2vec_parameters_dict = {

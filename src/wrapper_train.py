@@ -112,48 +112,59 @@ class WrapperTrainModel:
                     for lstm_hidden_layer in self.lstm_parameters_dict['lstm_hidden_layer']:
 
                         # run single lstm model with the following configuration
+                        try:
+                            lstm_parameters_dict = {
+                                'max_features': self.lstm_parameters_dict['max_features'],
+                                'maxlen': maxlen,
+                                'batch_size': batch_size,
+                                'embedding_size': self.lstm_parameters_dict['embedding_size'],
+                                'lstm_hidden_layer': lstm_hidden_layer,    # TODO change to different values
+                                'num_epoch': self.lstm_parameters_dict['num_epoch'],
+                                'dropout': dropout,  # 0.2
+                                'recurrent_dropout': self.lstm_parameters_dict['recurrent_dropout'],
+                                'tensor_board_bool': self.lstm_parameters_dict['tensor_board_bool'],
+                                'max_num_words': self.lstm_parameters_dict['max_num_words'],
+                                'optimizer': self.lstm_parameters_dict['optimizer'],
+                                'patience': self.lstm_parameters_dict['patience']
+                            }
 
-                        lstm_parameters_dict = {
-                            'max_features': self.lstm_parameters_dict['max_features'],
-                            'maxlen': maxlen,
-                            'batch_size': batch_size,
-                            'embedding_size': self.lstm_parameters_dict['embedding_size'],
-                            'lstm_hidden_layer': lstm_hidden_layer,    # TODO change to different values
-                            'num_epoch': self.lstm_parameters_dict['num_epoch'],
-                            'dropout': dropout,  # 0.2
-                            'recurrent_dropout': self.lstm_parameters_dict['recurrent_dropout'],
-                            'tensor_board_bool': self.lstm_parameters_dict['tensor_board_bool'],
-                            'max_num_words': self.lstm_parameters_dict['max_num_words'],
-                            'optimizer': self.lstm_parameters_dict['optimizer'],
-                            'patience': self.lstm_parameters_dict['patience']
-                        }
+                            logging.info('')
+                            logging.info('**************************************************************')
+                            logging.info('')
+                            logging.info('start model number: ' + str(model_num) + '/' + str(total_iteration))
+                            logging.info('lstm parameters: ' + str(lstm_parameters_dict))
 
-                        logging.info('')
-                        logging.info('**************************************************************')
-                        logging.info('')
-                        logging.info('start model number: ' + str(model_num) + '/' + str(total_iteration))
-                        logging.info('lstm parameters: ' + str(lstm_parameters_dict))
+                            train_obj = TrainModel(self.input_data_file,
+                                                   self.vertical_type,
+                                                   self.output_results_folder,
+                                                   self.tensor_board_dir,
+                                                   lstm_parameters_dict,
+                                                   df_configuration_dict,
+                                                   multi_class_configuration_dict,
+                                                   attention_configuration_dict,
+                                                   self.cv_configuration,
+                                                   self.test_size,
+                                                   self.embedding_pre_trained,
+                                                   self.embedding_type,
+                                                   logging)
 
-                        train_obj = TrainModel(self.input_data_file,
-                                               self.vertical_type,
-                                               self.output_results_folder,
-                                               self.tensor_board_dir,
-                                               lstm_parameters_dict,
-                                               df_configuration_dict,
-                                               multi_class_configuration_dict,
-                                               attention_configuration_dict,
-                                               self.cv_configuration,
-                                               self.test_size,
-                                               self.embedding_pre_trained,
-                                               self.embedding_type,
-                                               logging)
+                            model_num += 1
 
-                        model_num += 1
+                            logging.info('')
+                            train_obj.load_clean_csv_results()  # load data set
+                            train_obj.df_pre_processing()
+                            train_obj.run_experiment()
+                        except Exception as e:
 
-                        logging.info('')
-                        train_obj.load_clean_csv_results()  # load data set
-                        train_obj.df_pre_processing()
-                        train_obj.run_experiment()
+                            logging.info(
+                                'exception found during maxlen: {}, batch_size: {}, dropout: {}, lstm_hidden_layer: {}'
+                                    .format(maxlen, batch_size, dropout, lstm_hidden_layer)
+                            )
+                            logging.info('trace: {}'.format(e))
+                            logging.info('continue next configuration')
+                            logging.info('')
+                            logging.info('')
+                            logging.info('')
 
         return
 
@@ -183,6 +194,7 @@ if __name__ == '__main__':
     embedding_type = {
         'type': 'gensim',   # 'glove', 'gensim'
         # 'path': '../data/word2vec_pretrained/motors/d_300_k_712904_w_6_e_60_v_motors'       # path to gensim wv
+        # 'path': '../data/word2vec_pretrained/motors/d_100_k_712904_w_10_e_60_v_motors',
         'path': '../data/word2vec_pretrained/fashion/d_100_k_1341062_w_10_e_60_v_fashion',
         'd': 100,
         'w': 10,
@@ -201,17 +213,17 @@ if __name__ == '__main__':
     # 'Non-informative sentence' 'failure_reason'
 
     multi_class_configuration_dict = {
-        'multi_class_bool': True,                                   # whether to do single/multi class classification
+        'multi_class_bool': False,                                   # whether to do single/multi class classification
         'multi_class_label': [
-            'review_tag', 'subjective_sentence', 'missing_context'
+            'review_tag', 'missing_context', 'Non-informative sentence', 'Refers to a specific listing aspect'
         ],
-        # 'Non-informative sentence', 'Refers to a specific listing aspect', 'review_tag', 'subjective_sentence', 'missing_context'],      # ['review_tag', 'missing_context'] ['review_tag', 'subjective_sentence']
+        # 'Non-informative sentence', 'Refers to a specific listing aspect', , 'subjective_sentence', 'missing_context'],      # ['review_tag', 'missing_context'] ['review_tag', 'subjective_sentence']
         # 'multi_class_label': ['subjective_sentence', 'review_tag', 'missing_context'],
-        'loss_weights': [4, 1, 1]
+        'loss_weights': [4, 1, 2, 2]
     }
 
     attention_configuration_dict = {
-        'use_attention_bool': False
+        'use_attention_bool': True
     }
 
     # tag bad/good prediction
@@ -223,29 +235,15 @@ if __name__ == '__main__':
     }
 
     # quick hyper-parameters tuning
-    """lstm_parameters_dict = {
-        'max_features': 200000,
-        'maxlen': [20],                 # 20      # [8, 10, 15, 20],
-        'batch_size': [32],            # 32
-        'embedding_size': 100,          # fit to word2vec version dimension
-        'lstm_hidden_layer': [150, 250, 350, 450],  # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
-        'num_epoch': 30,
-        'dropout': [0.28, 0.23, 0.33],  # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
-        'recurrent_dropout': 0.1,       # TODO currently does not use in the model
-        'optimizer': 'rmsprop',         # 'rmsprop'/'adam'
-        'patience': 3,
-        'tensor_board_bool': True,
-        'max_num_words': None           # number of words allow in the tokenizer process - keras text tokenizer
-    }"""
 
     lstm_parameters_dict = {
         'max_features': 200000,
         'maxlen': [20],                 # 20      # [8, 10, 15, 20],
-        'batch_size': [128],            # 32
+        'batch_size': [32],            # 32
         'embedding_size': 100,          # fit to word2vec version dimension
-        'lstm_hidden_layer': [150, 300, 450],  # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
+        'lstm_hidden_layer': [250, 325, 450, 200],  # [50, 125, 175, 225, 300],  # TODO change  # 50, 100,
         'num_epoch': 30,
-        'dropout': [0.28, 0.23, 0.33],  # [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
+        'dropout': [0.23, 0.33, 0.28],  # 0.28, 0.23,  [0.33, 0.28, 0.23], # , 0.38],  # 0.2, 0.35, 0.5
         'recurrent_dropout': 0.1,       # TODO currently does not use in the model
         'optimizer': 'rmsprop',         # 'rmsprop'/'adam'
         'patience': 3,
